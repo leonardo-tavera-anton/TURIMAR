@@ -2,27 +2,25 @@ import { useState, useEffect } from 'react'
 import Dashboard from './pages/Dashboard'
 import PersonalizaExperiencia from './pages/PersonalizaExperiencia'
 import TurimarLanding from './pages/TurimarLanding'
-import Auth from './components/auth' // Importado con "a" minúscula igual que tu archivo
+import Auth from './components/auth'
 import { supabase } from './supabaseClient'
+import type { User } from '@supabase/supabase-js'
 
-// Agregamos 'auth' a tus tipos de pantalla
 type ScreenState = 'landing' | 'auth' | 'personalize' | 'dashboard'
 
 function App() {
   const [screen, setScreen] = useState<ScreenState>('landing')
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 1. Verificar si ya hay una sesión activa en Supabase
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(({ data: { user } }: { data: { user: User | null } }) => {
       setUser(user)
       if (user) setScreen('dashboard')
       setLoading(false)
     })
 
-    // 2. Escuchar cuando el usuario se loguea o cierra sesión
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       const currentUser = session?.user ?? null
       setUser(currentUser)
 
