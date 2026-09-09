@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import Dashboard from './pages/Dashboard'
 import PersonalizaExperiencia from './pages/PersonalizaExperiencia'
 import TurimarLanding from './pages/TurimarLanding'
@@ -11,7 +11,6 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 1. Verificar sesión inicial
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         const hasPersonalized = localStorage.getItem(`has_personalized_${user.id}`)
@@ -20,7 +19,6 @@ function App() {
       setLoading(false)
     })
 
-    // 2. Escuchar cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         const hasPersonalized = localStorage.getItem(`has_personalized_${session.user.id}`)
@@ -34,7 +32,6 @@ function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Marca la personalización como completada para este usuario
   const completePersonalization = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
@@ -57,16 +54,11 @@ function App() {
   }
 
   if (screen === 'personalize') {
-    return (
-      <PersonalizaExperiencia
-        onContinue={completePersonalization}
-        onSkip={completePersonalization}
-      />
-    )
+    return <PersonalizaExperiencia onContinue={completePersonalization} onSkip={completePersonalization} />
   }
 
   if (screen === 'dashboard') {
-    return <Dashboard onPinClick={() => undefined} onLogout={handleLogout} />
+    return <Dashboard onLogout={handleLogout} />
   }
 
   return <TurimarLanding onLogin={() => setScreen('dashboard')} />
