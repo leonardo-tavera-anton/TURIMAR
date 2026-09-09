@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import PelicanoAnimado from '../components/PelicanoAnimado';
+import ChalanaAnimada from '../components/ChalanaAnimada';
 
 export default function TurimarLanding({ onLogin }) {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -7,6 +9,9 @@ export default function TurimarLanding({ onLogin }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+
+  // 1. AÑADIDO: El estado que controla a dónde miran las gaviotas
+  const [inputActivo, setInputActivo] = useState(null);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -45,6 +50,7 @@ export default function TurimarLanding({ onLogin }) {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-900 text-white">
       {/* Lado izquierdo: Información y diseño */}
+      
       <div className="md:w-7/12 p-8 md:p-16 flex flex-col justify-between bg-gradient-to-br from-blue-900 via-slate-900 to-slate-950">
         <div>
           <div className="flex items-center space-x-2 mb-12">
@@ -60,6 +66,11 @@ export default function TurimarLanding({ onLogin }) {
           <p className="text-slate-300 text-lg max-w-lg mb-8">
             Rutas gastronómicas, huariques auténticos y puntos históricos costeros — todo en un solo mapa.
           </p>
+
+          <div className="-mx-4 sm:mx-0">
+            {/* 2. AÑADIDO: Le pasamos el estado actual a la chalana */}
+            <ChalanaAnimada inputActivo={inputActivo} />
+          </div>
         </div>
 
         <div className="flex space-x-12 pt-6 border-t border-slate-800">
@@ -100,6 +111,9 @@ export default function TurimarLanding({ onLogin }) {
                 className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none text-slate-800"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                // 3. AÑADIDO: Eventos focus y blur para el correo
+                onFocus={() => setInputActivo('email')}
+                onBlur={() => setInputActivo(null)}
               />
             </div>
 
@@ -114,6 +128,9 @@ export default function TurimarLanding({ onLogin }) {
                 className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none text-slate-800"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                // 4. AÑADIDO: Eventos focus y blur para la contraseña
+                onFocus={() => setInputActivo('password')}
+                onBlur={() => setInputActivo(null)}
               />
             </div>
 
