@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import "./Dashboard.css";
 import RealMap from "../components/dashboard/RealMap";
 
+// Categorías que el usuario puede seleccionar para filtrar las rutas.
 const routeCategories = [
   "Todas",
   "🐟 Huariques & Cebiche",
@@ -10,6 +11,8 @@ const routeCategories = [
   "🏛️ Cultura & Miradores",
 ];
 
+// Datos temporales de las rutas creadas por la comunidad.
+// Más adelante este arreglo puede reemplazarse por información de Supabase.
 const communityRoutes = [
   {
     author: "Carlos M.",
@@ -62,9 +65,13 @@ const communityRoutes = [
   },
 ];
 
+// Representa una ruta comunitaria con sus paradas, tramos, comentarios y acción.
 function RouteCard({ route, isSelected, onSelect }) {
+  // Controla si se muestran todos los tramos o solo los tres primeros.
   const [showAllLegs, setShowAllLegs] = useState(false);
+  // Controla si el usuario agregó esta ruta a sus rutas personales.
   const [used, setUsed] = useState(false);
+  // Calcula los tramos visibles según el estado del botón correspondiente.
   const visibleLegs = showAllLegs ? route.legs : route.legs.slice(0, 3);
 
   return (
@@ -109,19 +116,27 @@ function RouteCard({ route, isSelected, onSelect }) {
   );
 }
 
-export default function RoutePlannerScreen({ onBack }) {
+// Pantalla de exploración, creación y consulta de rutas comunitarias.
+export default function PlanRuta({ onBack }) {
+  // Categoría seleccionada en los filtros.
   const [activeCategory, setActiveCategory] = useState("Todas");
+  // Texto introducido en el buscador.
   const [search, setSearch] = useState("");
+  // Controla la apertura del creador de rutas.
   const [isCreating, setIsCreating] = useState(false);
+  // Ruta que se muestra seleccionada en la lista y en el mapa.
   const [selectedRoute, setSelectedRoute] = useState(communityRoutes[0]);
+  // Parada seleccionada dentro del mapa.
   const [activeMapLocation, setActiveMapLocation] = useState(null);
 
+  // Filtra rutas por categoría y por el texto introducido por el usuario.
   const filteredRoutes = useMemo(() => communityRoutes.filter((route) => {
     const matchesCategory = activeCategory === "Todas" || route.category === activeCategory;
     const matchesSearch = route.title.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
   }), [activeCategory, search]);
 
+  // Convierte las paradas de la ruta en lugares compatibles con RealMap.
   const routeMapLocations = selectedRoute.steps.map((step, index) => ({
     name: step.name,
     type: `Parada ${index + 1}`,
@@ -129,6 +144,7 @@ export default function RoutePlannerScreen({ onBack }) {
     icon: step.icon,
   }));
 
+  // Mantiene seleccionada la parada activa o usa la primera como predeterminada.
   const selectedMapLocation = activeMapLocation ?? routeMapLocations[0];
 
   return (

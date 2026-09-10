@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "./Dashboard.css";
-import ResultsScreen from "./ResultsScreen";
-import RoutePlannerScreen from "./RoutePlannerScreen";
+import ResultadosBusqueda from "./ResultadosBusqueda";
+import PlanRuta from "./PlanRuta";
 import RealMap from "../components/dashboard/RealMap";
 
 // Mensaje inicial que aparece en el estado del radar costero.
@@ -387,7 +387,7 @@ const resultDescriptions = {
 };
 
 // Filtros secundarios disponibles para cada guía.
-// Las pestañas de ciudad se manejan por separado dentro de ResultsScreen.
+// Las pestañas de ciudad se manejan por separado dentro de ResultadosBusqueda.
 const resultFilters = {
   Hostales: ["Más recomendados", "Más cercanos", "Wi-Fi", "Cochera"],
   Cebicherías: ["Más recomendados", "Más cercanos", "Vista al mar"],
@@ -540,12 +540,12 @@ export default function Dashboard({ onLogout }) {
   };
   if (selectedGuide)
     if (selectedGuide.title === "Plan de Ruta") {
-      return <RoutePlannerScreen onBack={() => setSelectedGuide(null)} />;
+      return <PlanRuta onBack={() => setSelectedGuide(null)} />;
     }
 
   if (selectedGuide)
     return (
-      <ResultsScreen
+      <ResultadosBusqueda
         guide={selectedGuide}
         locationsByGuide={locationsByGuide}
         resultImages={resultImages}

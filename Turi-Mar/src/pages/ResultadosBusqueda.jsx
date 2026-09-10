@@ -3,7 +3,7 @@ import "./Dashboard.css";
 import RealMap from "../components/dashboard/RealMap";
 
 // Pantalla de resultados de una guía: lista, filtros, mapa visual y ficha.
-export default function ResultsScreen({
+export default function ResultadosBusqueda({
   guide,
   locationsByGuide,
   resultImages,
@@ -12,6 +12,7 @@ export default function ResultsScreen({
   onBack,
 }) {
   // Busca los lugares de la guía actual; si no existe, usa una lista vacía.
+  // Obtiene los lugares asociados con la guía seleccionada.
   const locations = locationsByGuide[guide.title] ?? [];
 
   // Lugar que aparece seleccionado inicialmente en el mapa y en la ficha.
@@ -22,6 +23,7 @@ export default function ResultsScreen({
 
   // Controla el estado visual de los filtros secundarios.
   const [activeFilter, setActiveFilter] = useState("Más recomendados");
+  // Selecciona imágenes y filtros según la categoría actual.
   const images = resultImages[guide.title] ?? resultImages["Plan de Ruta"];
   const extraFilters = resultFilters[guide.title] ?? ["Más recomendados", "Más cercanos"];
 
@@ -32,6 +34,7 @@ export default function ResultsScreen({
     return true;
   });
 
+  // Renderiza el panel lateral y el mapa de resultados.
   return (
     <div className="locations-screen">
       <aside className="locations-list">
