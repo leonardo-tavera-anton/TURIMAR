@@ -430,7 +430,7 @@ function GuideCard({ guide, onSelect }) {
 }
 
 // Muestra el radar costero, sus puntos de referencia y acciones rápidas.
-function Radar({ notice, onAction }) {
+function Radar({ onAction }) {
   const [locationEnabled, setLocationEnabled] = useState(true);
 
   const toggleLocation = () => {
@@ -465,18 +465,6 @@ function Radar({ notice, onAction }) {
           locationEnabled={locationEnabled}
           onToggleLocation={toggleLocation}
         />
-        <div className="radar-footer">
-          <span>
-            <b></b>
-            {notice}
-            <i> · Rumbo NNO hacia Isla Blanca</i>
-          </span>
-          <button
-            onClick={() => navigator.clipboard?.writeText("-9.0744, -78.5937")}
-          >
-            Copiar Coordenadas
-          </button>
-        </div>
       </div>
     </section>
   );
@@ -564,14 +552,11 @@ export default function Dashboard({ onLogout }) {
           </strong>
         </button>
         <nav>
-          <button onClick={() => showNotice("Explorando el mapa costero")}>
-            🗺️ Explorar Mapa
-          </button>
           <button
             className="routes"
-            onClick={() => showNotice("Tus rutas guardadas están listas")}
+            onClick={() => setSelectedGuide({ title: "Plan de Ruta" })}
           >
-            ⌯ Ver Rutas
+            ⌯ Mis Rutas
           </button>
           <span className="avatar">JR</span>
           <button className="logout" onClick={onLogout}>
@@ -580,11 +565,10 @@ export default function Dashboard({ onLogout }) {
         </nav>
       </header>
       <main className="content">
-        <Radar notice={notice} onAction={showNotice} />
+        <Radar onAction={showNotice} />
         <section className="guides-section">
           <div className="section-title">
             <div>
-              <span>MÓDULOS DE AVENTURA COSTERA</span>
               <h1>Guías Temáticas Turi-Mar</h1>
             </div>
           </div>
