@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./Dashboard.css";
 import ResultsScreen from "./ResultsScreen";
+import RoutePlannerScreen from "./RoutePlannerScreen";
 import RealMap from "../components/dashboard/RealMap";
 
 // Mensaje inicial que aparece en el estado del radar costero.
@@ -16,7 +17,7 @@ const guides = [
     title: "Plan de Ruta",
     text: "Arma tu recorrido entre Caleta Colorada, Vesique y la bahía costera.",
     details: ["Vesique & Colorada", "Vivero Forestal"],
-    action: "Crear Rutas",
+    action: "Ver Rutas",
   },
   {
     icon: "🦑",
@@ -430,6 +431,14 @@ function GuideCard({ guide, onSelect }) {
 
 // Muestra el radar costero, sus puntos de referencia y acciones rápidas.
 function Radar({ notice, onAction }) {
+  const [locationEnabled, setLocationEnabled] = useState(true);
+
+  const toggleLocation = () => {
+    const nextValue = !locationEnabled;
+    setLocationEnabled(nextValue);
+    onAction(nextValue ? "Ubicación activada" : "Ubicación desactivada");
+  };
+
   return (
     <section className="radar-card">
       <div className="radar-header">
@@ -437,52 +446,36 @@ function Radar({ notice, onAction }) {
           <span className="radar-icon">◌</span>
           <div>
             <h2>
-              Radar Costero Turi-Mar <em>GPS EN VIVO</em>
+              Mapa en Vivo de Turi-Mar <em>GPS EN VIVO</em>
             </h2>
-            <p>
-              Coordenadas de usuario detectadas · Malecón Miguel Grau frente a
-              Caleta Chimbote
-            </p>
           </div>
         </div>
         <div className="radar-controls">
           <button
-            className="gps"
-            onClick={() => onAction("GPS activo y actualizado")}
+            className={`gps ${locationEnabled ? "location-on" : "location-off"}`}
+            onClick={toggleLocation}
           >
-            GPS Activo
-          </button>
-          <button onClick={() => onAction("Modo galería activado")}>
-            Modo Galería
-          </button>
-          <button
-            className="maps"
-            onClick={() => onAction("Ruta lista para consultar")}
-          >
-            ● Ruta en Google Maps
+            {locationEnabled ? "Ubicación activa" : "Ubicación apagada"}
           </button>
         </div>
       </div>
       <div className="radar-map">
-        <RealMap showToolbar={false} />
+        <RealMap
+          showToolbar={false}
+          locationEnabled={locationEnabled}
+          onToggleLocation={toggleLocation}
+        />
         <div className="radar-footer">
           <span>
             <b></b>
             {notice}
             <i> · Rumbo NNO hacia Isla Blanca</i>
           </span>
-          <div>
-            <button
-              onClick={() =>
-                navigator.clipboard?.writeText("-9.0744, -78.5937")
-              }
-            >
-              Copiar Coordenadas
-            </button>
-            <button onClick={() => onAction("Ruta lista para consultar")}>
-              ● Ruta en Google Maps
-            </button>
-          </div>
+          <button
+            onClick={() => navigator.clipboard?.writeText("-9.0744, -78.5937")}
+          >
+            Copiar Coordenadas
+          </button>
         </div>
       </div>
     </section>
@@ -546,6 +539,11 @@ export default function Dashboard({ onLogout }) {
     window.setTimeout(() => setNotice(DEFAULT_NOTICE), 2800);
   };
   if (selectedGuide)
+    if (selectedGuide.title === "Plan de Ruta") {
+      return <RoutePlannerScreen onBack={() => setSelectedGuide(null)} />;
+    }
+
+  if (selectedGuide)
     return (
       <ResultsScreen
         guide={selectedGuide}
@@ -589,11 +587,6 @@ export default function Dashboard({ onLogout }) {
               <span>MÓDULOS DE AVENTURA COSTERA</span>
               <h1>Guías Temáticas Turi-Mar</h1>
             </div>
-            <p>
-              Explora las rutas más representativas de la bahía y la costa
-              <br />
-              custodiadas por su fauna marina.
-            </p>
           </div>
           <div className="guides-grid">
             {guides.map((guide) => (

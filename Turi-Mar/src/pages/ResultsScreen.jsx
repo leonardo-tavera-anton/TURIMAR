@@ -99,6 +99,7 @@ export default function ResultsScreen({
           locations={locations}
           activeLocation={activeLocation}
           onSelectLocation={setActiveLocation}
+          onToggleLocation={() => {}}
         />
         {activeLocation && (
           <section className="location-detail">
