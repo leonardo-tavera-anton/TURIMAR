@@ -1,43 +1,41 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'https://turimar-backend.onrender.com';
+const API_URL = (import.meta as any).env.VITE_API_URL ?? 'https://turimar-backend.onrender.com';
 
 export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const handleAuth = async (e) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
 
     try {
       if (isSignUp) {
-        // Petición POST al endpoint de registro en Rust
         const response = await fetch(`${API_URL}/api/v1/usuarios`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             nombre: email.split('@')[0],
             email: email,
-            password_hash: password, // o 'password' según lo tengas en tu backend Rust
+            password_hash: password,
             rol: 'cliente',
           }),
         });
 
         if (!response.ok) {
           const errData = await response.json().catch(() => null);
-          throw new Error(errData?.message || 'Error al guardar en la base de datos');
+          throw new Error(errData?.message || `Error ${response.status}: No se pudo registrar`);
         }
 
         const usuarioCreado = await response.json();
-        setMessage('¡Usuario registrado con éxito en public.usuarios!');
+        setMessage('¡Usuario registrado con éxito!');
         localStorage.setItem('user', JSON.stringify(usuarioCreado));
       } else {
-        // Petición POST o GET para Login según tu endpoint de backend
         const response = await fetch(`${API_URL}/api/v1/usuarios/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -45,15 +43,15 @@ export default function Auth() {
         });
 
         if (!response.ok) {
-          throw new Error('Credenciales incorrectas o problema de conexión');
+          throw new Error('Credenciales incorrectas o error en el servidor');
         }
 
         const usuario = await response.json();
         setMessage('¡Sesión iniciada con éxito!');
         localStorage.setItem('user', JSON.stringify(usuario));
       }
-    } catch (error) {
-      setMessage(error.message);
+    } catch (error: any) {
+      setMessage(error.message || 'Ocurrió un error inesperado');
     } finally {
       setLoading(false);
     }
@@ -68,13 +66,13 @@ export default function Auth() {
 
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
-            <label className="block text-xs uppercase text-slate-400 mb-1">Correo</label>
+            <label className="block text-xs uppercase text-slate-400 mb-1">Correo electrónico</label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
             />
           </div>
 
@@ -85,7 +83,7 @@ export default function Auth() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
             />
           </div>
 
@@ -98,13 +96,14 @@ export default function Auth() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-500 font-bold rounded-lg transition-colors"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-500 font-bold rounded-lg transition-colors disabled:opacity-50"
           >
             {loading ? 'Procesando...' : isSignUp ? 'Registrarse' : 'Ingresar'}
           </button>
         </form>
 
         <button
+          type="button"
           onClick={() => setIsSignUp(!isSignUp)}
           className="w-full mt-4 text-sm text-slate-400 hover:underline text-center"
         >

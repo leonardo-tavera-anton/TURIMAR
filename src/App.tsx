@@ -1,11 +1,7 @@
-import Auth from './Auth';
+import Auth from './auth';
 
 function App() {
-  return (
-    <main className="min-h-screen bg-slate-950">
-      <Auth />
-    </main>
-  );
+  return <Auth />;
 }
 
 export default App;
