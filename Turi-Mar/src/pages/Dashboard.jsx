@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./Dashboard.css";
 import ResultadosBusqueda from "./ResultadosBusqueda";
 import PlanRuta from "./PlanRuta";
 import RealMap from "../components/dashboard/RealMap";
+import { supabase } from "../supabaseClient";
+import PerfilCuenta from "./PerfilCuenta";
 
 // Mensaje inicial que aparece en el estado del radar costero.
 const DEFAULT_NOTICE = "GPS sincronizado: Caleta & Malecón Miguel Grau";
@@ -446,7 +448,7 @@ function Radar({ onAction }) {
           <span className="radar-icon">◌</span>
           <div>
             <h2>
-              Mapa en Vivo de Turi-Mar <em>GPS EN VIVO</em>
+              Mapa en Vivo de Turi-Mar
             </h2>
           </div>
         </div>
@@ -520,12 +522,25 @@ function Footer() {
 export default function Dashboard({ onLogout }) {
   const [notice, setNotice] = useState(DEFAULT_NOTICE);
   const [selectedGuide, setSelectedGuide] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (active) setProfile(user);
+    });
+    return () => { active = false; };
+  }, []);
 
   // Muestra un aviso y lo devuelve al texto inicial después de 2.8 segundos.
   const showNotice = (message) => {
     setNotice(message);
     window.setTimeout(() => setNotice(DEFAULT_NOTICE), 2800);
   };
+  if (profileOpen) {
+    return <PerfilCuenta profile={profile} onBack={() => setProfileOpen(false)} />;
+  }
   if (selectedGuide)
     if (selectedGuide.title === "Plan de Ruta") {
       return <PlanRuta onBack={() => setSelectedGuide(null)} />;
@@ -558,7 +573,21 @@ export default function Dashboard({ onLogout }) {
           >
             ⌯ Mis Rutas
           </button>
-          <span className="avatar">JR</span>
+          <button
+            className="avatar profile-trigger"
+            aria-label="Abrir perfil"
+            aria-expanded={profileOpen}
+            onClick={() => setProfileOpen((open) => !open)}
+          >
+            {(profile?.user_metadata?.full_name || profile?.email || "JR").slice(0, 2).toUpperCase()}
+          </button>
+          {profileOpen && (
+            <div className="profile-menu">
+              <strong>{profile?.user_metadata?.full_name || "Tu perfil"}</strong>
+              <span>{profile?.email || "Sesión de Turi-Mar"}</span>
+              <button onClick={onLogout}>Cerrar sesión</button>
+            </div>
+          )}
           <button className="logout" onClick={onLogout}>
             Salir
           </button>

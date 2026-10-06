@@ -41,7 +41,7 @@ export default function TurimarLanding({ onLogin }) {
         setMessage(error.message);
       } else {
         setMessage('Correo o contraseña errones. Por favor, verifica tus credenciales.');
-        onLogin();
+        await onLogin?.();
       }
     }
     setLoading(false);

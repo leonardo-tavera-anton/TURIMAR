@@ -40,6 +40,13 @@ function App() {
     setScreen('dashboard')
   }
 
+  const handleLogin = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const hasPersonalized = localStorage.getItem(`has_personalized_${user.id}`)
+    setScreen(hasPersonalized ? 'dashboard' : 'personalize')
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     setScreen('landing')
@@ -61,7 +68,7 @@ function App() {
     return <Dashboard onLogout={handleLogout} />
   }
 
-  return <TurimarLanding onLogin={() => setScreen('dashboard')} />
+  return <TurimarLanding onLogin={handleLogin} />
 }
 
 export default App
