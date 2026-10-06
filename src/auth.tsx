@@ -1,114 +1,163 @@
 import React, { useState } from 'react';
 
-const API_URL = (import.meta as any).env.VITE_API_URL ?? 'https://turimar-backend.onrender.com';
-
 export default function Auth() {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
 
+    // Endpoint de tu servidor Rust/Axum en Render
+    const endpoint = isLogin
+      ? 'https://turimar-backend.onrender.com/api/v1/usuarios/login'
+      : 'https://turimar-backend.onrender.com/api/v1/usuarios';
+
     try {
-      if (isSignUp) {
-        const response = await fetch(`${API_URL}/api/v1/usuarios`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nombre: email.split('@')[0],
-            email: email,
-            password_hash: password,
-            rol: 'cliente',
-          }),
-        });
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => null);
-          throw new Error(errData?.message || `Error ${response.status}: No se pudo registrar`);
-        }
+      const data = await response.json();
 
-        const usuarioCreado = await response.json();
-        setMessage('¡Usuario registrado con éxito!');
-        localStorage.setItem('user', JSON.stringify(usuarioCreado));
-      } else {
-        const response = await fetch(`${API_URL}/api/v1/usuarios/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Credenciales incorrectas o error en el servidor');
-        }
-
-        const usuario = await response.json();
-        setMessage('¡Sesión iniciada con éxito!');
-        localStorage.setItem('user', JSON.stringify(usuario));
+      if (!response.ok) {
+        throw new Error(data.message || 'Error al procesar la solicitud');
       }
-    } catch (error: any) {
-      setMessage(error.message || 'Ocurrió un error inesperado');
+
+      setMessage({
+        text: isLogin ? '¡Inicio de sesión exitoso!' : '¡Registro exitoso!',
+        isError: false,
+      });
+
+      // Si es login y recibes un token o datos de usuario, los puedes guardar aquí
+      if (isLogin && data.token) {
+        localStorage.setItem('token', data.token);
+      }
+
+      setEmail('');
+      setPassword('');
+    } catch (err: any) {
+      setMessage({
+        text: err.message || 'Ocurrió un error al conectar con el servidor',
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4 text-white">
-      <div className="w-full max-w-md bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-xl">
-        <h2 className="text-2xl font-bold text-center mb-6">
-          {isSignUp ? 'Crear cuenta en Turi-Mar' : 'Iniciar Sesión'}
-        </h2>
-
-        <form onSubmit={handleAuth} className="space-y-4">
-          <div>
-            <label className="block text-xs uppercase text-slate-400 mb-1">Correo electrónico</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
-            />
+    <div className="flex min-h-screen bg-slate-950 text-white">
+      {/* Sección Izquierda - Panel Visual */}
+      <div className="hidden lg:flex lg:w-1/2 bg-blue-900 p-12 flex-col justify-between relative overflow-hidden">
+        <div>
+          <div className="flex items-center gap-2 mb-8">
+            <span className="bg-white text-blue-900 font-black px-2 py-1 rounded text-xl">TM</span>
+            <span className="font-bold text-2xl tracking-wide">Turi-Mar</span>
           </div>
+          <p className="text-blue-200 text-sm tracking-widest uppercase mb-4">Turismo & Gastronomía Local</p>
+          <h1 className="text-5xl font-black leading-tight mb-6">
+            Descubre los sabores ocultos del mar
+          </h1>
+          <p className="text-blue-100 text-lg max-w-md">
+            Rutas gastronómicas, huariques auténticos y puntos históricos costeros — todo en un solo mapa.
+          </p>
+        </div>
 
-          <div>
-            <label className="block text-xs uppercase text-slate-400 mb-1">Contraseña</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
-            />
+        <div className="relative z-10 text-xs text-blue-300">
+          © {new Date().getFullYear()} Turi-Mar. Todos los derechos reservados.
+        </div>
+      </div>
+
+      {/* Sección Derecha - Formulario */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center lg:text-left">
+            <h2 className="text-3xl font-bold tracking-tight">
+              {isLogin ? 'Inicia Sesión en Turi-Mar' : 'Crea tu cuenta en Turi-Mar'}
+            </h2>
+            <p className="text-slate-400 text-sm mt-2">
+              {isLogin
+                ? 'Ingresa tus credenciales para acceder a tu cuenta'
+                : 'Regístrate para comenzar la aventura (Mín. 8 caracteres)'}
+            </p>
           </div>
 
           {message && (
-            <div className="p-3 text-sm bg-blue-900/50 border border-blue-700 rounded-lg text-center">
-              {message}
+            <div
+              className={`p-4 rounded-md text-sm ${
+                message.isError
+                  ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+                  : 'bg-green-500/10 border border-green-500/20 text-green-400'
+              }`}
+            >
+              {message.text}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-500 font-bold rounded-lg transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Procesando...' : isSignUp ? 'Registrarse' : 'Ingresar'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                Correo Electrónico
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tu@correo.com"
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none text-white placeholder-slate-500"
+              />
+            </div>
 
-        <button
-          type="button"
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="w-full mt-4 text-sm text-slate-400 hover:underline text-center"
-        >
-          {isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
-        </button>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                Contraseña
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none text-white placeholder-slate-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold rounded-lg transition duration-200"
+            >
+              {loading ? 'Procesando...' : isLogin ? 'Iniciar Sesión' : 'Registrarse'}
+            </button>
+          </form>
+
+          <div className="text-center text-sm text-slate-400">
+            {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
+            <button
+              type="button"
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setMessage(null);
+              }}
+              className="text-blue-400 hover:underline font-medium"
+            >
+              {isLogin ? 'Regístrate aquí' : 'Inicia Sesión'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
