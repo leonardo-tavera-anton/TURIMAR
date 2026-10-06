@@ -1,28 +1,9 @@
-use axum::{http::StatusCode, routing::get, Json, Router};
-use serde::Serialize;
+use axum::{routing::{get, post}, Router};
 use std::{env, net::SocketAddr};
 use tower_http::cors::CorsLayer;
 
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
-    service: &'static str,
-    supabase_configured: bool,
-}
-
-async fn health() -> (StatusCode, Json<HealthResponse>) {
-    let supabase_configured = env::var("SUPABASE_URL").is_ok()
-        && env::var("SUPABASE_ANON_KEY").is_ok();
-
-    (
-        StatusCode::OK,
-        Json(HealthResponse {
-            status: "ok",
-            service: "turimar-api",
-            supabase_configured,
-        }),
-    )
-}
+mod handlers;
+mod models;
 
 #[tokio::main]
 async fn main() {
@@ -34,7 +15,8 @@ async fn main() {
         .unwrap_or(3000);
 
     let app = Router::new()
-        .route("/health", get(health))
+        .route("/health", get(handlers::health))
+        .route("/api/routes/generate", post(handlers::generar_ruta)) 
         .layer(CorsLayer::very_permissive());
 
     let address = SocketAddr::from(([127, 0, 0, 1], port));
