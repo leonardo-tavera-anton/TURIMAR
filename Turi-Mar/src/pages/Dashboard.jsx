@@ -517,9 +517,57 @@ function Footer() {
   );
 }
 
+function AiRoutePreview({ rutaData, routeError, onOpen }) {
+  if (routeError && !rutaData) {
+    return (
+      <section className="ai-route-preview ai-route-error">
+        <div>
+          <span className="ai-route-kicker">ASISTENTE DE RUTAS</span>
+          <h2>No pudimos preparar tu ruta personalizada</h2>
+          <p>{routeError}</p>
+        </div>
+        <button onClick={onOpen}>Ver rutas disponibles</button>
+      </section>
+    );
+  }
+
+  if (!rutaData) return null;
+
+  return (
+    <section className="ai-route-preview">
+      <div className="ai-route-main">
+        <div className="ai-route-heading">
+          <span className="ai-route-icon">✦</span>
+          <div>
+            <span className="ai-route-kicker">TU RUTA PERSONALIZADA</span>
+            <h2>{rutaData.titulo_ruta}</h2>
+          </div>
+          <span className="ai-route-badge">Generada por IA</span>
+        </div>
+        <p className="ai-route-description">{rutaData.descripcion}</p>
+        <div className="ai-route-stats">
+          <span><b>{rutaData.duracion_total_horas} h</b> duración</span>
+          <span><b>S/ {Number(rutaData.presupuesto_total_estimado).toFixed(2)}</b> presupuesto estimado</span>
+          <span><b>{rutaData.paradas?.length ?? 0}</b> paradas</span>
+        </div>
+      </div>
+      <div className="ai-route-stops">
+        <span className="ai-route-stops-label">PRIMERAS PARADAS</span>
+        {(rutaData.paradas ?? []).slice(0, 3).map((parada) => (
+          <div className="ai-route-stop" key={`${parada.orden}-${parada.nombre}`}>
+            <span>{parada.orden}</span>
+            <strong>{parada.nombre}</strong>
+          </div>
+        ))}
+        <button className="ai-route-open" onClick={onOpen}>Abrir ruta completa <span>→</span></button>
+      </div>
+    </section>
+  );
+}
+
 // Dashboard principal. Decide si muestra las guías o los resultados
 // y mantiene los avisos temporales de los botones superiores.
-export default function Dashboard({ onLogout }) {
+export default function Dashboard({ onLogout, rutaData, routeError }) {
   const [notice, setNotice] = useState(DEFAULT_NOTICE);
   const [selectedGuide, setSelectedGuide] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -543,7 +591,13 @@ export default function Dashboard({ onLogout }) {
   }
   if (selectedGuide)
     if (selectedGuide.title === "Plan de Ruta") {
-      return <PlanRuta onBack={() => setSelectedGuide(null)} />;
+      return (
+        <PlanRuta
+          onBack={() => setSelectedGuide(null)}
+          rutaData={rutaData}
+          routeError={routeError}
+        />
+      );
     }
 
   if (selectedGuide)
@@ -595,6 +649,11 @@ export default function Dashboard({ onLogout }) {
       </header>
       <main className="content">
         <Radar onAction={showNotice} />
+        <AiRoutePreview
+          rutaData={rutaData}
+          routeError={routeError}
+          onOpen={() => setSelectedGuide({ title: "Plan de Ruta" })}
+        />
         <section className="guides-section">
           <div className="section-title">
             <div>

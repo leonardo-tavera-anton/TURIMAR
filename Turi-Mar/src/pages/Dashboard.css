@@ -393,6 +393,50 @@
 .guides-section{
   margin-top:26px
 }
+.ai-route-preview{
+  margin-top:22px;
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr);
+  gap:22px;
+  padding:22px 24px;
+  background:#073552;
+  border:1px solid #0d6380;
+  border-radius:16px;
+  box-shadow:0 10px 26px #07355225;
+  color:#fff
+}
+.ai-route-main{min-width:0}
+.ai-route-heading{display:flex;align-items:center;gap:12px}
+.ai-route-icon{display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;border-radius:12px;background:#ffd34f;color:#073552;font-size:23px}
+.ai-route-kicker{display:block;color:#73e0dc;font-size:9px;font-weight:900;letter-spacing:1.2px}
+.ai-route-heading h2{margin:4px 0 0;font-size:23px;line-height:1.12;color:#fff}
+.ai-route-badge{margin-left:auto;white-space:nowrap;padding:6px 9px;border-radius:8px;background:#19b39d;color:#062e46;font-size:9px;font-weight:900}
+.ai-route-description{max-width:650px;margin:14px 0 16px;color:#c6e4ed;font-size:11px;line-height:1.55}
+.ai-route-stats{display:flex;flex-wrap:wrap;gap:9px}
+.ai-route-stats span{padding:8px 10px;border:1px solid #28627a;border-radius:8px;color:#a9cfdb;font-size:10px}
+.ai-route-stats b{margin-right:4px;color:#ffd34f;font-size:12px}
+.ai-route-stops{display:flex;flex-direction:column;gap:8px;padding-left:20px;border-left:1px solid #28627a}
+.ai-route-stops-label{color:#73e0dc;font-size:9px;font-weight:900;letter-spacing:1px}
+.ai-route-stop{display:flex;align-items:center;gap:9px;color:#e4f4f7;font-size:11px}
+.ai-route-stop span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#0d7892;color:#fff;font-size:10px;font-weight:900}
+.ai-route-stop strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-route-open,.ai-route-error button{margin-top:7px;border:0;border-radius:8px;background:#ffd34f;color:#073552;padding:10px 12px;text-align:left;font-size:10px;font-weight:900;cursor:pointer;transition:transform .2s ease,background-color .2s ease}
+.ai-route-open:hover,.ai-route-error button:hover{background:#ffe17c;transform:translateY(-2px)}
+.ai-route-open span{float:right;font-size:15px;line-height:10px}
+.ai-route-error{display:flex;align-items:center;justify-content:space-between;gap:20px;background:#fff8e6;border-color:#ffd263;color:#173653}
+.ai-route-error .ai-route-kicker{color:#c56a00}
+.ai-route-error h2{margin:5px 0;color:#173653;font-size:18px}
+.ai-route-error p{margin:0;color:#6d6b64;font-size:11px}
+@media(max-width:800px){
+  .ai-route-preview{grid-template-columns:1fr;padding:18px}
+  .ai-route-stops{padding-left:0;border-left:0;border-top:1px solid #28627a;padding-top:16px}
+}
+@media(max-width:520px){
+  .ai-route-heading{align-items:flex-start;flex-wrap:wrap}
+  .ai-route-badge{margin-left:50px}
+  .ai-route-heading h2{font-size:19px}
+  .ai-route-error{align-items:flex-start;flex-direction:column}
+}
 .section-title{
   display:flex;
   align-items:end;

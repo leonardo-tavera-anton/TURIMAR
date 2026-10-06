@@ -10,7 +10,6 @@ export default function TurimarLanding({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-  // 1. AÑADIDO: El estado que controla a dónde miran las gaviotas
   const [inputActivo, setInputActivo] = useState(null);
 
   const handleAuth = async (e) => {
@@ -19,7 +18,6 @@ export default function TurimarLanding({ onLogin }) {
     setMessage(null);
 
     if (isSignUp) {
-      // Validación estricta de contraseña para el registro
       const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 
       if (!passwordRegex.test(password)) {
@@ -41,7 +39,7 @@ export default function TurimarLanding({ onLogin }) {
         setMessage(error.message);
       } else {
         setMessage('Correo o contraseña errones. Por favor, verifica tus credenciales.');
-        await onLogin?.();
+        onLogin();
       }
     }
     setLoading(false);

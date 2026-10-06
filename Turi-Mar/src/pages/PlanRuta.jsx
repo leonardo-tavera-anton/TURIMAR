@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import "./Dashboard.css";
 import RealMap from "../components/dashboard/RealMap";
 
-// Categorías que el usuario puede seleccionar para filtrar las rutas.
 const routeCategories = [
   "Todas",
   "🐟 Huariques & Cebiche",
@@ -11,8 +10,7 @@ const routeCategories = [
   "🏛️ Cultura & Miradores",
 ];
 
-// Datos temporales de las rutas creadas por la comunidad.
-// Más adelante este arreglo puede reemplazarse por información de Supabase.
+
 const communityRoutes = [
   {
     author: "Carlos M.",
@@ -65,13 +63,9 @@ const communityRoutes = [
   },
 ];
 
-// Representa una ruta comunitaria con sus paradas, tramos, comentarios y acción.
 function RouteCard({ route, isSelected, onSelect }) {
-  // Controla si se muestran todos los tramos o solo los tres primeros.
   const [showAllLegs, setShowAllLegs] = useState(false);
-  // Controla si el usuario agregó esta ruta a sus rutas personales.
   const [used, setUsed] = useState(false);
-  // Calcula los tramos visibles según el estado del botón correspondiente.
   const visibleLegs = showAllLegs ? route.legs : route.legs.slice(0, 3);
 
   return (
@@ -80,7 +74,7 @@ function RouteCard({ route, isSelected, onSelect }) {
         <span className="route-avatar">{route.avatar}</span>
         <div className="route-title-copy">
           <h2>{route.title}</h2>
-          <p>Publicado por <strong>{route.author}</strong> · Guía Chimbotano</p>
+          <p>{route.source === "ai" ? "Generada por Turi-Mar IA según tus preferencias" : <>Publicado por <strong>{route.author}</strong> · Guía Chimbotano</>}</p>
         </div>
         <div className="route-rating">★ <strong>{route.rating}</strong> <small>({route.votes} votos)</small><br /><a>{route.comments} comentarios</a></div>
       </header>
@@ -116,35 +110,64 @@ function RouteCard({ route, isSelected, onSelect }) {
   );
 }
 
-// Pantalla de exploración, creación y consulta de rutas comunitarias.
-export default function PlanRuta({ onBack }) {
-  // Categoría seleccionada en los filtros.
+export default function PlanRuta({ onBack, rutaData, routeError }) {
+  const generatedRoute = useMemo(() => {
+    if (!rutaData) return null;
+
+    return {
+      source: "ai",
+      author: "Turi-Mar IA",
+      avatar: "IA",
+      title: rutaData.titulo_ruta,
+      rating: "-",
+      votes: 0,
+      comments: 0,
+      category: "Todas",
+      duration: `${rutaData.duracion_total_horas}h`,
+      budget: `S/ ${Number(rutaData.presupuesto_total_estimado).toFixed(2)}`,
+      steps: (rutaData.paradas ?? []).map((parada) => ({
+        icon: String(parada.orden),
+        name: parada.nombre,
+        description: parada.descripcion_actividad,
+        latitude: parada.coordenadas?.lat,
+        longitude: parada.coordenadas?.lng,
+      })),
+      legs: (rutaData.tramos ?? []).map((tramo) =>
+        `${tramo.modo_transporte}: ${tramo.origen} hacia ${tramo.destino}. ` +
+        `Duración aproximada: ${tramo.duracion_estimada_minutos} minutos.`
+      ),
+      comment: rutaData.paradas?.[0]?.tips_ia ?? "Ruta personalizada según tus preferencias.",
+      commenter: "Guía IA",
+    };
+  }, [rutaData]);
+
+  const availableRoutes = generatedRoute
+    ? [generatedRoute, ...communityRoutes]
+    : communityRoutes;
+
   const [activeCategory, setActiveCategory] = useState("Todas");
-  // Texto introducido en el buscador.
   const [search, setSearch] = useState("");
-  // Controla la apertura del creador de rutas.
   const [isCreating, setIsCreating] = useState(false);
-  // Ruta que se muestra seleccionada en la lista y en el mapa.
-  const [selectedRoute, setSelectedRoute] = useState(communityRoutes[0]);
-  // Parada seleccionada dentro del mapa.
+  const [selectedRoute, setSelectedRoute] = useState(
+    generatedRoute ?? communityRoutes[0]
+  );
   const [activeMapLocation, setActiveMapLocation] = useState(null);
 
-  // Filtra rutas por categoría y por el texto introducido por el usuario.
-  const filteredRoutes = useMemo(() => communityRoutes.filter((route) => {
+  const filteredRoutes = useMemo(() => availableRoutes.filter((route) => {
     const matchesCategory = activeCategory === "Todas" || route.category === activeCategory;
     const matchesSearch = route.title.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
-  }), [activeCategory, search]);
+  }), [activeCategory, availableRoutes, search]);
 
-  // Convierte las paradas de la ruta en lugares compatibles con RealMap.
   const routeMapLocations = selectedRoute.steps.map((step, index) => ({
     name: step.name,
     type: `Parada ${index + 1}`,
-    address: `Tramo ${index + 1} de la ruta comunitaria`,
+    address: step.description ?? `Tramo ${index + 1} de la ruta comunitaria`,
+    latitude: step.latitude,
+    longitude: step.longitude,
     icon: step.icon,
   }));
 
-  // Mantiene seleccionada la parada activa o usa la primera como predeterminada.
   const selectedMapLocation = activeMapLocation ?? routeMapLocations[0];
 
   return (
@@ -160,6 +183,7 @@ export default function PlanRuta({ onBack }) {
             </div>
             <button className="create-route-button" onClick={() => setIsCreating(!isCreating)}>⊕ <strong>{isCreating ? "Cerrar creador de rutas" : "Crear tu propia ruta"}</strong></button>
             {isCreating && <div className="route-builder"><strong>Diseña tu ruta paso a paso</strong><p>Selecciona lugares del mapa, agrega tramos y publica tu recorrido para la comunidad.</p><button onClick={() => setIsCreating(false)}>Empezar con una ruta vacía</button></div>}
+            {routeError && <div className="route-builder"><strong>No se pudo generar tu ruta</strong><p>{routeError}</p></div>}
           </section>
           <section className="community-routes-section">
             <header><div><h2>◉ Rutas Recomendadas de la Comunidad</h2><p>Circuitos creados por chimbotanos y viajeros reales con líneas de conexión directa, gastos exactos y tips de transporte.</p></div><span>✓ Verificadas ({filteredRoutes.length} activas)</span></header>
