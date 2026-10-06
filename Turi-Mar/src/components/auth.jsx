@@ -16,39 +16,41 @@ export default function Auth() {
 
     try {
       if (isSignUp) {
-        // Guarda directamente en public.usuarios desde el backend en Rust
+        // Petición POST al endpoint de registro en Rust
         const response = await fetch(`${API_URL}/api/v1/usuarios`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             nombre: email.split('@')[0],
             email: email,
-            password_hash: password,
+            password_hash: password, // o 'password' según lo tengas en tu backend Rust
             rol: 'cliente',
           }),
         });
 
         if (!response.ok) {
-          throw new Error('Error al registrar usuario en la base de datos');
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.message || 'Error al guardar en la base de datos');
         }
 
         const usuarioCreado = await response.json();
-        setMessage('¡Usuario registrado con éxito!');
+        setMessage('¡Usuario registrado con éxito en public.usuarios!');
         localStorage.setItem('user', JSON.stringify(usuarioCreado));
       } else {
-        // Consulta los usuarios de la tabla public.usuarios
-        const response = await fetch(`${API_URL}/api/v1/usuarios`);
-        if (!response.ok) throw new Error('Error al conectar con el servidor');
+        // Petición POST o GET para Login según tu endpoint de backend
+        const response = await fetch(`${API_URL}/api/v1/usuarios/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
 
-        const usuarios = await response.json();
-        const usuarioEncontrado = usuarios.find((u) => u.email === email && u.password_hash === password);
-
-        if (usuarioEncontrado) {
-          setMessage('¡Sesión iniciada correctamente!');
-          localStorage.setItem('user', JSON.stringify(usuarioEncontrado));
-        } else {
-          throw new Error('Correo o contraseña incorrectos');
+        if (!response.ok) {
+          throw new Error('Credenciales incorrectas o problema de conexión');
         }
+
+        const usuario = await response.json();
+        setMessage('¡Sesión iniciada con éxito!');
+        localStorage.setItem('user', JSON.stringify(usuario));
       }
     } catch (error) {
       setMessage(error.message);
@@ -58,54 +60,37 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-4">
-      <div className="w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl p-8 transform transition-all duration-500 animate-fadeIn scale-100">
-        
-        {/* Cabecera */}
-        <div className="text-center mb-8">
-          <span className="inline-block bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full mb-3 shadow-lg shadow-blue-500/30">
-            Turi-Mar
-          </span>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">
-            {isSignUp ? 'Crea tu cuenta' : 'Bienvenido de nuevo'}
-          </h2>
-          <p className="text-slate-400 text-sm mt-1">
-            {isSignUp ? 'Empieza a explorar la costa y sus sabores' : 'Ingresa tus credenciales para continuar'}
-          </p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4 text-white">
+      <div className="w-full max-w-md bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-xl">
+        <h2 className="text-2xl font-bold text-center mb-6">
+          {isSignUp ? 'Crear cuenta en Turi-Mar' : 'Iniciar Sesión'}
+        </h2>
 
-        {/* Formulario */}
-        <form onSubmit={handleAuth} className="space-y-5">
+        <form onSubmit={handleAuth} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Correo Electrónico
-            </label>
+            <label className="block text-xs uppercase text-slate-400 mb-1">Correo</label>
             <input
               type="email"
               required
-              placeholder="tu@correo.com"
-              className="w-full px-4 py-3 bg-slate-950/60 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-white placeholder-slate-500 transition-all duration-300"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Contraseña
-            </label>
+            <label className="block text-xs uppercase text-slate-400 mb-1">Contraseña</label>
             <input
               type="password"
               required
-              placeholder="••••••••"
-              className="w-full px-4 py-3 bg-slate-950/60 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-white placeholder-slate-500 transition-all duration-300"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
             />
           </div>
 
           {message && (
-            <div className="p-3 text-sm font-medium text-blue-300 bg-blue-950/50 border border-blue-800 rounded-xl text-center animate-pulse">
+            <div className="p-3 text-sm bg-blue-900/50 border border-blue-700 rounded-lg text-center">
               {message}
             </div>
           )}
@@ -113,37 +98,18 @@ export default function Auth() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/30 transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-500 font-bold rounded-lg transition-colors"
           >
-            {loading ? (
-              <span className="flex items-center justify-center space-x-2">
-                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Procesando...</span>
-              </span>
-            ) : (
-              isSignUp ? 'Registrarse' : 'Iniciar Sesión'
-            )}
+            {loading ? 'Procesando...' : isSignUp ? 'Registrarse' : 'Ingresar'}
           </button>
         </form>
 
-        {/* Alternar modo */}
-        <div className="mt-8 text-center text-sm text-slate-400">
-          {isSignUp ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setMessage(null);
-            }}
-            className="font-semibold text-blue-400 hover:text-blue-300 transition-colors ml-1 underline-offset-4 hover:underline"
-          >
-            {isSignUp ? 'Inicia sesión' : 'Regístrate'}
-          </button>
-        </div>
-
+        <button
+          onClick={() => setIsSignUp(!isSignUp)}
+          className="w-full mt-4 text-sm text-slate-400 hover:underline text-center"
+        >
+          {isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+        </button>
       </div>
     </div>
   );
