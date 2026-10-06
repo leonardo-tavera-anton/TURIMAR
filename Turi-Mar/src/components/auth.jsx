@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '../supabaseClient';
+
+const API_URL = import.meta.env.VITE_API_URL ?? 'https://turimar-backend.onrender.com';
 
 export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -13,21 +14,51 @@ export default function Auth() {
     setLoading(true);
     setMessage(null);
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) setMessage(error.message);
-      else setMessage('¡Registro exitoso! Revisa tu correo o inicia sesión.');
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setMessage(error.message);
-    }
+    try {
+      if (isSignUp) {
+        // Guarda directamente en public.usuarios desde el backend en Rust
+        const response = await fetch(`${API_URL}/api/v1/usuarios`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: email.split('@')[0],
+            email: email,
+            password_hash: password,
+            rol: 'cliente',
+          }),
+        });
 
-    setLoading(false);
+        if (!response.ok) {
+          throw new Error('Error al registrar usuario en la base de datos');
+        }
+
+        const usuarioCreado = await response.json();
+        setMessage('¡Usuario registrado con éxito!');
+        localStorage.setItem('user', JSON.stringify(usuarioCreado));
+      } else {
+        // Consulta los usuarios de la tabla public.usuarios
+        const response = await fetch(`${API_URL}/api/v1/usuarios`);
+        if (!response.ok) throw new Error('Error al conectar con el servidor');
+
+        const usuarios = await response.json();
+        const usuarioEncontrado = usuarios.find((u) => u.email === email && u.password_hash === password);
+
+        if (usuarioEncontrado) {
+          setMessage('¡Sesión iniciada correctamente!');
+          localStorage.setItem('user', JSON.stringify(usuarioEncontrado));
+        } else {
+          throw new Error('Correo o contraseña incorrectos');
+        }
+      }
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-4">
-      {/* Contenedor principal con animación de entrada (fade-in y escala suave) */}
       <div className="w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl p-8 transform transition-all duration-500 animate-fadeIn scale-100">
         
         {/* Cabecera */}
