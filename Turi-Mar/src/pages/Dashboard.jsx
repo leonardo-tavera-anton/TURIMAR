@@ -25,7 +25,7 @@ const guides = [
     icon: "🦑",
     tag: "Cangrejo & Anchoveta",
     color: "orange",
-    title: "Cebicherías",
+    title: "Cevicherías",
     text: "El pescado más fresco: cebiche de cabrilla y conchitas a la chalaca.",
     note: "Top recomendado:",
     noteText: "Huachafaría Marina · Bolognesi",
