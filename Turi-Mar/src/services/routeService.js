@@ -71,10 +71,20 @@ export async function getUserRoutes(userId) {
   try {
     data = await request(`/api/v1/rutas/usuario/${encodeURIComponent(userId)}`);
   } catch (error) {
-    if (error.status === 404) {
-      throw new Error("Render devuelve 404 en GET /api/v1/rutas/usuario/:usuarioId. El backend debe habilitar esta consulta para recuperar rutas ya guardadas.");
+    if (error.status !== 404 && !error.message.includes("prepared statement")) throw error;
+
+    const { data: savedRoutes, error: queryError } = await supabase
+      .from("rutas")
+      .select("*")
+      .eq("usuario_id", userId)
+      .order("created_at", { ascending: false });
+    if (queryError) {
+      throw new Error(`Render no pudo leer las rutas y Supabase rechazó la consulta: ${queryError.message}`);
     }
-    throw error;
+    if (!savedRoutes?.length) {
+      throw new Error("No se pudieron recuperar rutas: verifica que la policy SELECT de rutas permita consultar las rutas propias. Render también presenta un error SQLx.");
+    }
+    data = savedRoutes;
   }
   const routes = [data, data?.rutas, data?.routes, data?.data, data?.data?.rutas, data?.data?.routes]
     .find(Array.isArray);
@@ -140,7 +150,24 @@ export async function deleteUserRoute(routeId, userId) {
 }
 
 export async function getRoutePoints(routeId) {
-  const data = await request(`/api/v1/rutas/${encodeURIComponent(routeId)}/puntos`);
+  let data;
+  try {
+    data = await request(`/api/v1/rutas/${encodeURIComponent(routeId)}/puntos`);
+  } catch (error) {
+    if (error.status !== 404 && !error.message.includes("prepared statement")) throw error;
+    const { data: savedPoints, error: queryError } = await supabase
+      .from("ruta_puntos")
+      .select("*")
+      .eq("ruta_id", routeId)
+      .order("orden", { ascending: true });
+    if (queryError) {
+      throw new Error(`Render no pudo leer las paradas y Supabase rechazó la consulta: ${queryError.message}`);
+    }
+    if (!savedPoints?.length) {
+      throw new Error("No se pudieron recuperar las paradas. Verifica la policy SELECT de ruta_puntos.");
+    }
+    return savedPoints;
+  }
   return [data, data?.puntos, data?.points, data?.data, data?.data?.puntos, data?.data?.points]
     .find(Array.isArray) ?? [];
 }

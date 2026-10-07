@@ -32,15 +32,40 @@ async function request(path, options = {}) {
 }
 
 export function getOwnerLocals(userId) {
-  return request(`/api/v1/locales/usuario/${encodeURIComponent(userId)}`);
+  return request(`/api/v1/locales/usuario/${encodeURIComponent(userId)}`).catch(async (error) => {
+    if (!error.message.includes("prepared statement")) throw error;
+
+    const { data, error: queryError } = await supabase
+      .from("locales")
+      .select("*")
+      .eq("usuario_id", userId)
+      .order("created_at", { ascending: false });
+    if (queryError) {
+      throw new Error(`Render tiene un error SQLx y Supabase no permitió leer tus locales: ${queryError.message}`);
+    }
+    if (!data?.length) {
+      throw new Error("Render tiene un error SQLx y Supabase no devolvió locales. Verifica la policy SELECT de locales para el usuario autenticado.");
+    }
+    return data;
+  });
 }
 
 export async function getPublicLocals() {
-  const data = await request("/api/v1/locales");
-  const locals = [data, data?.locales, data?.locals, data?.data, data?.data?.locales]
-    .find(Array.isArray);
-  if (!locals) throw new Error("El backend devolvió un formato inesperado para los locales.");
-  return locals.filter((local) => local.activo !== false);
+  try {
+    const data = await request("/api/v1/locales");
+    const locals = [data, data?.locales, data?.locals, data?.data, data?.data?.locales]
+      .find(Array.isArray);
+    if (!locals) throw new Error("El backend devolvió un formato inesperado para los locales.");
+    return locals.filter((local) => local.activo !== false);
+  } catch (error) {
+    if (!error.message.includes("prepared statement")) throw error;
+    const { data, error: queryError } = await supabase
+      .from("locales")
+      .select("*")
+      .eq("activo", true);
+    if (queryError) throw new Error(`Render tiene un error SQLx y Supabase no permitió cargar locales públicos: ${queryError.message}`);
+    return data ?? [];
+  }
 }
 
 export function createLocal(local) {
@@ -88,11 +113,22 @@ export function deleteLocal(localId, userId) {
 }
 
 export async function getLocalMenu(localId) {
-  const data = await request(`/api/v1/servicios/local/${encodeURIComponent(localId)}`);
-  const services = [data, data?.servicios, data?.items, data?.data, data?.data?.servicios]
-    .find(Array.isArray);
-  if (!services) throw new Error("El backend devolvió un formato inesperado para la carta.");
-  return services;
+  try {
+    const data = await request(`/api/v1/servicios/local/${encodeURIComponent(localId)}`);
+    const services = [data, data?.servicios, data?.items, data?.data, data?.data?.servicios]
+      .find(Array.isArray);
+    if (!services) throw new Error("El backend devolvió un formato inesperado para la carta.");
+    return services;
+  } catch (error) {
+    if (!error.message.includes("prepared statement")) throw error;
+    const { data, error: queryError } = await supabase
+      .from("servicios")
+      .select("*")
+      .eq("local_id", localId)
+      .eq("activo", true);
+    if (queryError) throw new Error(`Render tiene un error SQLx y Supabase no permitió cargar la carta: ${queryError.message}`);
+    return data ?? [];
+  }
 }
 
 export function createLocalDish(localId, dish) {
