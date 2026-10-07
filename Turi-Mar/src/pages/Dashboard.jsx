@@ -5,7 +5,7 @@ import RouteCreator from "./RouteCreator";
 import RealMap from "../components/dashboard/RealMap";
 import { supabase } from "../supabaseClient";
 import PerfilCuenta from "./PerfilCuenta";
-import { getPublicLocals } from "../services/localService";
+import { getLocalMenu, getPublicLocals } from "../services/localService";
 
 // Mensaje inicial que aparece en el estado del radar costero.
 const DEFAULT_NOTICE = "GPS sincronizado: Caleta & Malecón Miguel Grau";
@@ -489,11 +489,29 @@ function GuideCard({ guide, onSelect }) {
 // Muestra el radar costero, sus puntos de referencia y acciones rápidas.
 function Radar({ onAction, locations, localsLoadError }) {
   const [locationEnabled, setLocationEnabled] = useState(true);
+  const [selectedLocal, setSelectedLocal] = useState(null);
+  const [menuItems, setMenuItems] = useState([]);
+  const [menuLoading, setMenuLoading] = useState(false);
+  const [menuError, setMenuError] = useState("");
 
   const toggleLocation = () => {
     const nextValue = !locationEnabled;
     setLocationEnabled(nextValue);
     onAction(nextValue ? "Ubicación activada" : "Ubicación desactivada");
+  };
+
+  const openLocal = async (local) => {
+    setSelectedLocal(local);
+    setMenuItems([]);
+    setMenuError("");
+    setMenuLoading(true);
+    try {
+      setMenuItems(await getLocalMenu(local.id));
+    } catch (error) {
+      setMenuError(`No se pudo cargar la carta: ${error.message}`);
+    } finally {
+      setMenuLoading(false);
+    }
   };
 
   return (
@@ -517,13 +535,43 @@ function Radar({ onAction, locations, localsLoadError }) {
           </button>
         </div>
       </div>
-      <div className="radar-map">
-        <RealMap
-          locations={locations}
-          showToolbar={false}
-          locationEnabled={locationEnabled}
-          onToggleLocation={toggleLocation}
-        />
+      <div className={`radar-map ${selectedLocal ? "radar-map-with-sidebar" : ""}`}>
+        <div className="radar-map-canvas">
+          <RealMap
+            locations={locations}
+            activeLocation={selectedLocal}
+            onSelectLocation={(location) => location.isCommunityLocal && openLocal(location)}
+            showToolbar={false}
+            locationEnabled={locationEnabled}
+            onToggleLocation={toggleLocation}
+          />
+        </div>
+        {selectedLocal && (
+          <aside className="radar-local-sidebar">
+            <div className="radar-local-sidebar-heading">
+              <span>LOCAL DE LA COMUNIDAD</span>
+              <button type="button" aria-label="Cerrar ficha del local" onClick={() => setSelectedLocal(null)}>×</button>
+            </div>
+            <h3>{selectedLocal.name}</h3>
+            <span className="radar-local-category">{selectedLocal.type}</span>
+            <p>{selectedLocal.address}</p>
+            {selectedLocal.descripcion && <p>{selectedLocal.descripcion}</p>}
+            {selectedLocal.telefono && <p><b>Teléfono:</b> {selectedLocal.telefono}</p>}
+            {selectedLocal.horario && <p><b>Horario:</b> {selectedLocal.horario}</p>}
+            <div className="radar-local-menu">
+              <strong>Carta</strong>
+              {menuLoading && <small>Cargando platos…</small>}
+              {menuError && <small className="radar-local-error" role="alert">{menuError}</small>}
+              {!menuLoading && !menuError && menuItems.length === 0 && <small>Aún no hay platos publicados.</small>}
+              {menuItems.map((dish) => (
+                <div key={dish.id ?? `${dish.nombre}-${dish.precio}`}>
+                  <span><b>{dish.nombre ?? dish.name ?? "Plato"}</b>{dish.descripcion && <small>{dish.descripcion}</small>}</span>
+                  <strong>S/ {Number(dish.precio ?? 0).toFixed(2)}</strong>
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
       </div>
     </section>
   );

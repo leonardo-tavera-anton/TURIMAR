@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import RealMap from "../components/dashboard/RealMap";
 import { supabase } from "../supabaseClient";
 import { cacheUserRoute, crearRutaComunidad } from "../services/routeService";
 import { identifyMapLocation } from "../services/placeLookup";
+import { getDrivingRoute } from "../services/directionsService";
 
 const categories = [
   ["cultural", "Cultura y miradores"],
@@ -30,9 +31,51 @@ export default function RouteCreator({ onBack, routeError }) {
   const [detectedPlace, setDetectedPlace] = useState(null);
   const [lookingUpPlace, setLookingUpPlace] = useState(false);
   const [points, setPoints] = useState([]);
+  const [roadGeometry, setRoadGeometry] = useState([]);
+  const [routeCalculating, setRouteCalculating] = useState(false);
+  const [routeCalculationError, setRouteCalculationError] = useState("");
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
   const lookupController = useRef(null);
+  const routeController = useRef(null);
+
+  useEffect(() => {
+    routeController.current?.abort();
+    if (points.length < 2) {
+      setRoadGeometry([]);
+      setRouteCalculationError("");
+      setRouteCalculating(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    routeController.current = controller;
+    setRoadGeometry([]);
+    setRouteCalculationError("");
+    setRouteCalculating(true);
+
+    Promise.all(points.slice(0, -1).map((point, index) => getDrivingRoute(
+      point,
+      points[index + 1],
+      controller.signal,
+    )))
+      .then((segments) => {
+        if (controller.signal.aborted) return;
+        setRoadGeometry(segments.flatMap((segment, index) => (
+          index === 0 ? segment.coordinates : segment.coordinates.slice(1)
+        )));
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setRouteCalculationError(error instanceof Error ? error.message : "No se pudo calcular el camino por calles.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRouteCalculating(false);
+      });
+
+    return () => controller.abort();
+  }, [points]);
 
   const mapLocations = [
     ...points.map((point, index) => ({
@@ -48,7 +91,7 @@ export default function RouteCreator({ onBack, routeError }) {
       longitude: selectedPosition.longitude,
     }] : []),
   ];
-  const routeLine = points.map(({ latitude, longitude }) => [latitude, longitude]);
+  const routeLine = roadGeometry;
 
   const selectPosition = async (latitude, longitude) => {
     lookupController.current?.abort();
@@ -127,6 +170,10 @@ export default function RouteCreator({ onBack, routeError }) {
       setFeedback("Agrega al menos dos paradas para publicar.");
       return;
     }
+    if (routeCalculating || routeCalculationError || roadGeometry.length < 2) {
+      setFeedback(routeCalculationError || "Espera a que se calcule el recorrido por calles.");
+      return;
+    }
 
     setSaving(true);
     setFeedback("");
@@ -180,9 +227,15 @@ export default function RouteCreator({ onBack, routeError }) {
       <div className="route-create-layout">
         <section className="route-create-map" aria-label="Mapa para seleccionar paradas">
           <div className="route-create-map-label">CHIMBOTE · SELECCIONA UNA UBICACIÓN</div>
+          {points.length > 1 && (
+            <div className={`route-create-map-status ${routeCalculationError ? "error" : ""}`} role="status">
+              {routeCalculating ? "Trazando camino por calles…" : routeCalculationError || "Recorrido por calles listo"}
+            </div>
+          )}
           <RealMap
             locations={mapLocations}
             routeLine={routeLine}
+            fitLocations={points.length > 1}
             showToolbar={false}
             showUserMarker={false}
             requestUserLocation={false}
@@ -269,7 +322,7 @@ export default function RouteCreator({ onBack, routeError }) {
           </div>
 
           {(feedback || routeError) && <p className="route-create-feedback" role="status">{feedback || routeError}</p>}
-          <button type="button" className="route-publish" onClick={publishRoute} disabled={saving || points.length < 2 || !titleLocked}>
+          <button type="button" className="route-publish" onClick={publishRoute} disabled={saving || routeCalculating || Boolean(routeCalculationError) || roadGeometry.length < 2 || points.length < 2 || !titleLocked}>
             {saving ? "Publicando…" : "Publicar ruta"}
           </button>
           {!titleLocked && <small className="route-create-hint">Fija el nombre de la ruta para continuar.</small>}
