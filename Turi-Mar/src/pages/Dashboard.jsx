@@ -126,7 +126,7 @@ const locationsByGuide = {
       // Coordenadas obtenidas del Plus Code WCGJ+HFX compartido por el usuario.
       latitude: -9.0731375,
       longitude: -78.568859375,
-      type: "Cebichería",
+      type: "Cevichería",
       address: "Av. Precursores, Chimbote",
       price: "Desde S/ 30",
       rating: "4.8",
@@ -156,7 +156,7 @@ const locationsByGuide = {
     },
     {
       name: "Cevicheria El Picantito",
-      type: "Cebichería",
+      type: "Cevichería",
       address: "Av. Brasil, Mz C prima, Lote 7, Nuevo Chimbote",
       price: "Consultar precio",
       rating: "3.9",
