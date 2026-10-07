@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import RealMap from "../components/dashboard/RealMap";
 import { supabase } from "../supabaseClient";
-import { crearRutaComunidad } from "../services/routeService";
+import { cacheUserRoute, crearRutaComunidad } from "../services/routeService";
 import { identifyMapLocation } from "../services/placeLookup";
 
 const categories = [
@@ -135,14 +135,16 @@ export default function RouteCreator({ onBack, routeError }) {
       if (error) throw error;
       if (!user) throw new Error("Inicia sesión para publicar una ruta.");
 
-      await crearRutaComunidad({
+      const routePayload = {
         usuario_id: user.id,
         titulo: title.trim(),
         descripcion: points.map((point) => point.comment).filter(Boolean).join(" "),
         categoria: category,
         duracion_total_horas: Math.max(1, Number((points.length * 35 / 60).toFixed(2))),
         presupuesto_total_estimado: points.length * 12,
-      }, points);
+      };
+      const savedRoute = await crearRutaComunidad(routePayload, points);
+      cacheUserRoute(user.id, { ...routePayload, ...savedRoute, puntos: points });
 
       setTitle("");
       setTitleLocked(false);

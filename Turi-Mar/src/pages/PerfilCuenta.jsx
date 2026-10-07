@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
 import RealMap from "../components/dashboard/RealMap";
-import { createLocal, deleteLocal, getOwnerLocals, updateLocal } from "../services/localService";
+import { createLocal, createLocalDish, deleteLocal, getLocalMenu, getOwnerLocals, updateLocal } from "../services/localService";
 import { reverseGeocode } from "../services/placeLookup";
-import { getRoutePoints, getUserRoutes } from "../services/routeService";
+import { getCachedUserRoutes, getRoutePoints, getUserRoutes } from "../services/routeService";
 
 const clientTabs = [
   { id: "my-routes", icon: "⌁", label: "Mis rutas" },
@@ -34,6 +34,13 @@ export default function PerfilCuenta({ profile, onBack }) {
     longitud: "",
   });
   const [locals, setLocals] = useState([]);
+  const [viewingLocal, setViewingLocal] = useState(null);
+  const [localDetailTab, setLocalDetailTab] = useState("details");
+  const [menuItems, setMenuItems] = useState([]);
+  const [menuLoading, setMenuLoading] = useState(false);
+  const [menuSaving, setMenuSaving] = useState(false);
+  const [menuError, setMenuError] = useState("");
+  const [dishForm, setDishForm] = useState({ nombre: "", descripcion: "", precio: "" });
   const [localsLoading, setLocalsLoading] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
   const [editingLocalId, setEditingLocalId] = useState(null);
@@ -74,7 +81,13 @@ export default function PerfilCuenta({ profile, onBack }) {
         if (active) setRoutes(expandedRoutes);
       })
       .catch((error) => {
-        if (active) setRoutesError(`No se pudieron cargar tus rutas: ${error.message}`);
+        if (active) {
+          const cachedRoutes = getCachedUserRoutes(profile.id);
+          setRoutes(cachedRoutes);
+          setRoutesError(cachedRoutes.length
+            ? `Mostrando las rutas guardadas en este dispositivo. No se pudo sincronizar: ${error.message}`
+            : `No se pudieron cargar tus rutas: ${error.message}`);
+        }
       })
       .finally(() => {
         if (active) setRoutesLoading(false);
@@ -107,6 +120,25 @@ export default function PerfilCuenta({ profile, onBack }) {
 
     return () => { active = false; };
   }, [role, profile?.id]);
+  useEffect(() => {
+    if (!viewingLocal || localDetailTab !== "menu") return;
+
+    let active = true;
+    setMenuLoading(true);
+    setMenuError("");
+    getLocalMenu(viewingLocal.id)
+      .then((items) => {
+        if (active) setMenuItems(items);
+      })
+      .catch((error) => {
+        if (active) setMenuError(`No se pudo cargar la carta: ${error.message}`);
+      })
+      .finally(() => {
+        if (active) setMenuLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [viewingLocal?.id, localDetailTab]);
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return "Sin fecha registrada";
 
@@ -221,6 +253,36 @@ export default function PerfilCuenta({ profile, onBack }) {
       setMessage(`No se pudo eliminar el local: ${error.message}`);
     } finally {
       setDeletingLocalId(null);
+    }
+  };
+
+  const saveDish = async (event) => {
+    event.preventDefault();
+    if (!viewingLocal || !dishForm.nombre.trim()) {
+      setMenuError("Escribe el nombre del plato.");
+      return;
+    }
+
+    const price = Number(dishForm.precio);
+    if (!dishForm.precio.trim() || !Number.isFinite(price) || price < 0) {
+      setMenuError("Escribe un precio válido en soles.");
+      return;
+    }
+
+    setMenuSaving(true);
+    setMenuError("");
+    try {
+      await createLocalDish(viewingLocal.id, {
+        nombre: dishForm.nombre.trim(),
+        descripcion: dishForm.descripcion.trim(),
+        precio: price,
+      });
+      setMenuItems(await getLocalMenu(viewingLocal.id));
+      setDishForm({ nombre: "", descripcion: "", precio: "" });
+    } catch (error) {
+      setMenuError(`No se pudo guardar el plato: ${error.message}`);
+    } finally {
+      setMenuSaving(false);
     }
   };
 
@@ -343,7 +405,11 @@ export default function PerfilCuenta({ profile, onBack }) {
                   }));
                   setRoutes(expanded);
                 } catch (error) {
-                  setRoutesError(`No se pudieron cargar tus rutas: ${error.message}`);
+                  const cachedRoutes = getCachedUserRoutes(profile.id);
+                  setRoutes(cachedRoutes);
+                  setRoutesError(cachedRoutes.length
+                    ? `Mostrando las rutas guardadas en este dispositivo. No se pudo sincronizar: ${error.message}`
+                    : `No se pudieron cargar tus rutas: ${error.message}`);
                 } finally {
                   setRoutesLoading(false);
                 }
@@ -385,10 +451,53 @@ export default function PerfilCuenta({ profile, onBack }) {
         {role === "propietario" && tab === "my-locals" && (
           <section className="fig-owner-locals fig-box">
             <div className="fig-section-title">
-              <h2>Mis locales <small>({locals.length})</small></h2>
-              <button onClick={() => { resetLocalForm(); setTab("add-local"); }}>＋ Agregar local</button>
+              <h2>{viewingLocal ? viewingLocal.nombre : <>Mis locales <small>({locals.length})</small></>}</h2>
+              {viewingLocal ? (
+                <button onClick={() => { setViewingLocal(null); setLocalDetailTab("details"); }}>← Mis locales</button>
+              ) : <button onClick={() => { resetLocalForm(); setTab("add-local"); }}>＋ Agregar local</button>}
             </div>
-            {localsLoading ? <p className="fig-empty">Cargando locales…</p> : locals.length ? (
+            {viewingLocal ? (
+              <>
+                <nav className="fig-local-tabs" aria-label="Secciones del local">
+                  <button className={localDetailTab === "details" ? "active" : ""} onClick={() => setLocalDetailTab("details")}>Información</button>
+                  <button className={localDetailTab === "menu" ? "active" : ""} onClick={() => setLocalDetailTab("menu")}>Carta</button>
+                </nav>
+                {localDetailTab === "details" ? (
+                  <div className="fig-local-detail">
+                    <p>{viewingLocal.descripcion || "Sin descripción."}</p>
+                    <dl>
+                      <div><dt>Categoría</dt><dd>{viewingLocal.categoria ?? viewingLocal.tipo_local ?? "Local"}</dd></div>
+                      <div><dt>Dirección</dt><dd>{viewingLocal.direccion || "Sin dirección"}</dd></div>
+                      <div><dt>Horario</dt><dd>{viewingLocal.horario || "Sin horario registrado"}</dd></div>
+                      <div><dt>Teléfono</dt><dd>{viewingLocal.telefono || "Sin teléfono registrado"}</dd></div>
+                    </dl>
+                    <button className="fig-secondary" onClick={() => editLocal(viewingLocal)}>Editar local</button>
+                  </div>
+                ) : (
+                  <div className="fig-local-menu">
+                    <div className="fig-section-title"><h3>Carta y platos</h3><span>{menuItems.length} platos</span></div>
+                    {menuLoading && <p className="fig-empty">Cargando carta…</p>}
+                    {menuError && <p className="fig-feedback fig-feedback-error" role="alert">{menuError}</p>}
+                    {!menuLoading && !menuError && menuItems.length === 0 && <p className="fig-empty">Todavía no hay platos en la carta.</p>}
+                    <div className="fig-dish-list">
+                      {menuItems.map((dish) => (
+                        <article className="fig-dish-item" key={dish.id ?? `${dish.nombre}-${dish.precio}`}>
+                          <div><strong>{dish.nombre ?? dish.name ?? "Plato"}</strong>{dish.descripcion && <small>{dish.descripcion}</small>}</div>
+                          <b>S/ {Number(dish.precio ?? 0).toFixed(2)}</b>
+                        </article>
+                      ))}
+                    </div>
+                    <form className="fig-dish-form" onSubmit={saveDish}>
+                      <h3>Agregar plato</h3>
+                      <label>Nombre del plato<input required maxLength={100} value={dishForm.nombre} onChange={(event) => setDishForm((current) => ({ ...current, nombre: event.target.value }))} placeholder="Ej. Ceviche mixto" /></label>
+                      <label>Descripción<input maxLength={240} value={dishForm.descripcion} onChange={(event) => setDishForm((current) => ({ ...current, descripcion: event.target.value }))} placeholder="Ingredientes o presentación" /></label>
+                      <label>Precio (S/)<input required type="number" min="0" step="0.01" value={dishForm.precio} onChange={(event) => setDishForm((current) => ({ ...current, precio: event.target.value }))} placeholder="0.00" /></label>
+                      <button className="fig-primary" disabled={menuSaving}>{menuSaving ? "Guardando…" : "Guardar plato"}</button>
+                    </form>
+                  </div>
+                )}
+              </>
+            ) : localsLoading ? <p className="fig-empty">Cargando locales…</p> : locals.length ? (
               <div className="fig-local-list">
                 {locals.map((local) => (
                   <article className="fig-local-item" key={local.id}>
@@ -398,6 +507,7 @@ export default function PerfilCuenta({ profile, onBack }) {
                       <small>{local.latitud ?? local.latitude}, {local.longitud ?? local.longitude}</small>
                     </div>
                     <div className="fig-local-actions">
+                      <button className="fig-secondary" onClick={() => { setViewingLocal(local); setLocalDetailTab("details"); setMenuItems([]); setMenuError(""); }}>Ver local</button>
                       <button className="fig-secondary" onClick={() => editLocal(local)}>Editar</button>
                       <button className="fig-danger" onClick={() => removeLocal(local)} disabled={deletingLocalId === local.id}>
                         {deletingLocalId === local.id ? "Eliminando…" : "Eliminar"}

@@ -1,4 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "https://turimar-backend.onrender.com";
+const ROUTE_CACHE_PREFIX = "turimar_routes_";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -16,7 +17,9 @@ async function request(path, options = {}) {
   }
   if (!response.ok) {
     const message = typeof data === "string" ? data : data?.message ?? data?.error;
-    throw new Error(message || `Error ${response.status} del backend`);
+    const error = new Error(message || `Error ${response.status} del backend`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -62,13 +65,41 @@ export async function crearRutaComunidad(route, points) {
 }
 
 export async function getUserRoutes(userId) {
-  const data = await request(`/api/v1/rutas/usuario/${encodeURIComponent(userId)}`);
+  let data;
+  try {
+    data = await request(`/api/v1/rutas/usuario/${encodeURIComponent(userId)}`);
+  } catch (error) {
+    if (error.status === 404) {
+      throw new Error("Render devuelve 404 en GET /api/v1/rutas/usuario/:usuarioId. El backend debe habilitar esta consulta para recuperar rutas ya guardadas.");
+    }
+    throw error;
+  }
   const routes = [data, data?.rutas, data?.routes, data?.data, data?.data?.rutas, data?.data?.routes]
     .find(Array.isArray);
   if (!Array.isArray(routes)) {
     throw new Error("El backend devolvió un formato inesperado para tus rutas.");
   }
   return routes;
+}
+
+export function getCachedUserRoutes(userId) {
+  try {
+    const routes = JSON.parse(localStorage.getItem(`${ROUTE_CACHE_PREFIX}${userId}`) ?? "[]");
+    return Array.isArray(routes) ? routes : [];
+  } catch {
+    return [];
+  }
+}
+
+export function cacheUserRoute(userId, route) {
+  try {
+    const routes = getCachedUserRoutes(userId);
+    const routeId = route.id ?? route.ruta_id;
+    const filtered = routes.filter((item) => (item.id ?? item.ruta_id) !== routeId);
+    localStorage.setItem(`${ROUTE_CACHE_PREFIX}${userId}`, JSON.stringify([route, ...filtered]));
+  } catch {
+    // Route publication remains successful even if browser storage is unavailable.
+  }
 }
 
 export async function getRoutePoints(routeId) {

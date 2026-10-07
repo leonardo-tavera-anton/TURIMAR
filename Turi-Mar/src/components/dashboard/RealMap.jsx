@@ -142,6 +142,7 @@ export default function RealMap({
             const position = getLocationPosition(location);
             if (!position) return null;
             const isActive = activeLocation?.name === location.name;
+            const markerColor = location.kind === "start" ? "#16836f" : isActive ? "#e35d24" : "#087eaa";
 
             return (
               <CircleMarker
@@ -151,7 +152,7 @@ export default function RealMap({
                 pathOptions={{
                   color: "#ffffff",
                   weight: 2,
-                  fillColor: isActive ? "#e35d24" : "#087eaa",
+                  fillColor: markerColor,
                   fillOpacity: 1,
                 }}
                 eventHandlers={{ click: () => onSelectLocation(location) }}

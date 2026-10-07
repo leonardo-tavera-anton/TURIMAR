@@ -58,3 +58,22 @@ export function deleteLocal(localId) {
     method: "DELETE",
   });
 }
+
+export async function getLocalMenu(localId) {
+  const data = await request(`/api/v1/servicios/local/${encodeURIComponent(localId)}`);
+  const services = [data, data?.servicios, data?.items, data?.data, data?.data?.servicios]
+    .find(Array.isArray);
+  if (!services) throw new Error("El backend devolvió un formato inesperado para la carta.");
+  return services;
+}
+
+export function createLocalDish(localId, dish) {
+  return request("/api/v1/servicios", {
+    method: "POST",
+    body: JSON.stringify({
+      local_id: localId,
+      categoria: "gastronomia",
+      ...dish,
+    }),
+  });
+}

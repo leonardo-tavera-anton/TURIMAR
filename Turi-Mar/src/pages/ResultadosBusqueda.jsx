@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import "./Dashboard.css";
 import RealMap from "../components/dashboard/RealMap";
+import { getDrivingRoute } from "../services/directionsService";
+import { getLocalMenu } from "../services/localService";
 
 // Pantalla de resultados de una guía: lista, filtros, mapa visual y ficha.
 export default function ResultadosBusqueda({
@@ -19,10 +21,89 @@ export default function ResultadosBusqueda({
   // Lugar que aparece seleccionado inicialmente en el mapa y en la ficha.
   const [activeLocation, setActiveLocation] = useState(null);
   const [zoomOnSelection, setZoomOnSelection] = useState(false);
+  const [navigationRoute, setNavigationRoute] = useState(null);
+  const [navigationLoading, setNavigationLoading] = useState(false);
+  const [navigationError, setNavigationError] = useState("");
+  const navigationController = useRef(null);
+  const [publicMenu, setPublicMenu] = useState([]);
+  const [publicMenuOpen, setPublicMenuOpen] = useState(false);
+  const [publicMenuLoading, setPublicMenuLoading] = useState(false);
+  const [publicMenuError, setPublicMenuError] = useState("");
 
   const selectLocation = (location) => {
+    navigationController.current?.abort();
+    setNavigationLoading(false);
+    setNavigationRoute(null);
+    setNavigationError("");
+    setPublicMenu([]);
+    setPublicMenuOpen(false);
+    setPublicMenuError("");
     setActiveLocation(location);
     setZoomOnSelection(true);
+  };
+
+  const togglePublicMenu = async () => {
+    if (publicMenuOpen) {
+      setPublicMenuOpen(false);
+      return;
+    }
+    setPublicMenuOpen(true);
+    if (publicMenu.length || !activeLocation?.id) return;
+
+    setPublicMenuLoading(true);
+    setPublicMenuError("");
+    try {
+      setPublicMenu(await getLocalMenu(activeLocation.id));
+    } catch (error) {
+      setPublicMenuError(`No se pudo cargar la carta: ${error.message}`);
+    } finally {
+      setPublicMenuLoading(false);
+    }
+  };
+
+  const startNavigation = async () => {
+    if (!Number.isFinite(activeLocation?.latitude) || !Number.isFinite(activeLocation?.longitude)) return;
+    if (!navigator.geolocation) {
+      setNavigationError("Este navegador no permite obtener tu ubicación.");
+      return;
+    }
+
+    navigationController.current?.abort();
+    const controller = new AbortController();
+    navigationController.current = controller;
+    setNavigationLoading(true);
+    setNavigationError("");
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 30000,
+        });
+      });
+      const origin = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
+      const route = await getDrivingRoute(origin, activeLocation, controller.signal);
+      if (controller.signal.aborted) return;
+      setNavigationRoute({ ...route, origin, destination: activeLocation });
+      setZoomOnSelection(false);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (error?.code === 1) setNavigationError("Permite el acceso a tu ubicación para trazar la ruta.");
+      else if (error?.code === 2 || error?.code === 3) setNavigationError("No se pudo obtener tu ubicación. Inténtalo nuevamente.");
+      else setNavigationError(error instanceof Error ? error.message : "No se pudo trazar la ruta.");
+    } finally {
+      if (!controller.signal.aborted) setNavigationLoading(false);
+    }
+  };
+
+  const stopNavigation = () => {
+    navigationController.current?.abort();
+    setNavigationLoading(false);
+    setNavigationRoute(null);
+    setNavigationError("");
   };
 
   // Solo una pestaña de ciudad puede estar activa a la vez.
@@ -45,8 +126,19 @@ export default function ResultadosBusqueda({
   const hasMappableLocations = visibleLocations.some(
     ({ latitude, longitude }) => Number.isFinite(latitude) && Number.isFinite(longitude),
   );
+  const mapLocations = navigationRoute ? [
+    {
+      ...navigationRoute.origin,
+      name: "Tu ubicación",
+      address: "Punto de partida",
+      kind: "start",
+    },
+    navigationRoute.destination,
+  ] : visibleLocations;
+  const routePositions = navigationRoute?.coordinates ?? [];
 
   const changeTab = (tab) => {
+    stopNavigation();
     setActiveTab(tab);
     setZoomOnSelection(false);
     setActiveLocation(null);
@@ -123,15 +215,35 @@ export default function ResultadosBusqueda({
       </aside>
       <main className="locations-map">
         <RealMap
-          locations={visibleLocations}
-          activeLocation={activeLocation}
+          locations={mapLocations}
+          activeLocation={navigationRoute ? null : activeLocation}
           onSelectLocation={selectLocation}
-          fitLocations={hasMappableLocations}
-          zoomToActiveLocation={zoomOnSelection}
+          fitLocations={navigationRoute ? true : hasMappableLocations}
+          zoomToActiveLocation={navigationRoute ? false : zoomOnSelection}
+          routeLine={routePositions}
           showUserMarker={false}
           onToggleLocation={() => {}}
         />
-        {activeLocation && (
+        {navigationRoute ? (
+          <section className="location-detail navigation-detail">
+            <button className="close-detail" aria-label="Finalizar navegación" title="Finalizar navegación" onClick={stopNavigation}>×</button>
+            <span className="detail-photo">⌖</span>
+            <div className="navigation-summary">
+              <h3>Ruta trazada</h3>
+              <p>Desde tu ubicación hasta {navigationRoute.destination.name}</p>
+              <div className="navigation-metrics">
+                <strong>{(navigationRoute.distanceMeters / 1000).toFixed(1)} km</strong>
+                <strong>{Math.max(1, Math.round(navigationRoute.durationSeconds / 60))} min aprox.</strong>
+              </div>
+              <ol>
+                {navigationRoute.steps.slice(0, 4).map((step, index) => (
+                  <li key={`${step.instruction}-${index}`}>{step.instruction}</li>
+                ))}
+              </ol>
+            </div>
+            <button className="navigate-button navigation-stop" onClick={stopNavigation}>Finalizar ruta</button>
+          </section>
+        ) : activeLocation && (
           <section className="location-detail">
             <button className="close-detail" aria-label="Volver a todas las secciones" title="Volver a todas las secciones" onClick={onBack}>×</button>
             <span className="detail-photo">{activeLocation.icon}</span>
@@ -142,17 +254,34 @@ export default function ResultadosBusqueda({
               {activeLocation.isCommunityLocal ? (
                 <p className="detail-meta">Publicado por un propietario de Turi-Mar</p>
               ) : <p className="detail-meta">A 650 m · 7 min a pie</p>}
+              {activeLocation.isCommunityLocal && (
+                <button type="button" className="public-menu-toggle" onClick={togglePublicMenu}>
+                  {publicMenuOpen ? "Ocultar carta" : "Ver carta"}
+                </button>
+              )}
+              {publicMenuOpen && activeLocation.isCommunityLocal && (
+                <div className="public-menu-panel">
+                  <strong>Carta del local</strong>
+                  {publicMenuLoading && <small>Cargando platos…</small>}
+                  {publicMenuError && <small className="public-menu-error" role="alert">{publicMenuError}</small>}
+                  {!publicMenuLoading && !publicMenuError && publicMenu.length === 0 && <small>Aún no hay platos publicados.</small>}
+                  {publicMenu.map((dish) => (
+                    <div className="public-menu-item" key={dish.id ?? `${dish.nombre}-${dish.precio}`}>
+                      <span><b>{dish.nombre ?? dish.name ?? "Plato"}</b>{dish.descripcion && <small>{dish.descripcion}</small>}</span>
+                      <strong>S/ {Number(dish.precio ?? 0).toFixed(2)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               className="navigate-button"
-              disabled={!Number.isFinite(activeLocation.latitude) || !Number.isFinite(activeLocation.longitude)}
-              onClick={() => {
-                const destination = `${activeLocation.latitude},${activeLocation.longitude}`;
-                window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`, "_blank");
-              }}
+              disabled={!Number.isFinite(activeLocation.latitude) || !Number.isFinite(activeLocation.longitude) || navigationLoading}
+              onClick={startNavigation}
             >
-              ⌖ Iniciar navegación
+              {navigationLoading ? "Trazando ruta…" : "⌖ Trazar ruta desde mi ubicación"}
             </button>
+            {navigationError && <p className="navigation-error" role="alert">{navigationError}</p>}
           </section>
         )}
       </main>
