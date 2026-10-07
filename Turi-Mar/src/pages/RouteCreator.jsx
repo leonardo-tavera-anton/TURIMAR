@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import RealMap from "../components/dashboard/RealMap";
 import { supabase } from "../supabaseClient";
 import { crearRutaComunidad } from "../services/routeService";
+import { identifyMapLocation } from "../services/placeLookup";
 
 const categories = [
   ["cultural", "Cultura y miradores"],
@@ -25,9 +26,13 @@ export default function RouteCreator({ onBack, routeError }) {
   const [stopName, setStopName] = useState("");
   const [stopNote, setStopNote] = useState("");
   const [selectedPosition, setSelectedPosition] = useState(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const [detectedPlace, setDetectedPlace] = useState(null);
+  const [lookingUpPlace, setLookingUpPlace] = useState(false);
   const [points, setPoints] = useState([]);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const lookupController = useRef(null);
 
   const mapLocations = [
     ...points.map((point, index) => ({
@@ -45,8 +50,38 @@ export default function RouteCreator({ onBack, routeError }) {
   ];
   const routeLine = points.map(({ latitude, longitude }) => [latitude, longitude]);
 
-  const selectPosition = (latitude, longitude) => {
+  const selectPosition = async (latitude, longitude) => {
+    lookupController.current?.abort();
+    const controller = new AbortController();
+    lookupController.current = controller;
     setSelectedPosition({ latitude, longitude });
+    setStopName("");
+    setStopNote("");
+    setDetectedPlace(null);
+    setNearbyPlaces([]);
+    setLookingUpPlace(true);
+    setFeedback("");
+
+    try {
+      const result = await identifyMapLocation(latitude, longitude, controller.signal);
+      if (controller.signal.aborted) return;
+      setDetectedPlace(result.place);
+      setNearbyPlaces(result.nearby);
+      if (result.place) {
+        setStopName(result.place.name);
+        setStopNote(result.place.address);
+      }
+      if (result.searchFailed) setFeedback("No se pudo buscar el lugar automáticamente. Puedes completar el nombre manualmente.");
+    } finally {
+      if (!controller.signal.aborted) setLookingUpPlace(false);
+    }
+  };
+
+  const chooseNearbyPlace = (place) => {
+    setSelectedPosition({ latitude: place.latitude, longitude: place.longitude });
+    setStopName(place.name);
+    setStopNote(place.address);
+    setDetectedPlace(null);
     setFeedback("");
   };
 
@@ -196,6 +231,23 @@ export default function RouteCreator({ onBack, routeError }) {
               <small className="route-create-coordinates">
                 {selectedPosition.latitude.toFixed(6)}, {selectedPosition.longitude.toFixed(6)}
               </small>
+            )}
+            {lookingUpPlace && <p className="route-place-status" role="status">Buscando el lugar y restaurantes cercanos…</p>}
+            {detectedPlace && (
+              <p className="route-place-detected">
+                Lugar detectado: <strong>{detectedPlace.name}</strong>
+              </p>
+            )}
+            {nearbyPlaces.length > 0 && (
+              <div className="route-nearby-list">
+                <strong>Restaurantes cercanos</strong>
+                {nearbyPlaces.map((place) => (
+                  <button type="button" key={place.id} onClick={() => chooseNearbyPlace(place)}>
+                    <span><b>{place.name}</b><small>{place.address || place.type}</small></span>
+                    <small>{place.distance < 1000 ? `${Math.round(place.distance)} m` : `${(place.distance / 1000).toFixed(1)} km`}</small>
+                  </button>
+                ))}
+              </div>
             )}
             <button type="button" className="route-add-stop" onClick={addPoint}>＋ Añadir parada</button>
           </div>

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
 import RealMap from "../components/dashboard/RealMap";
 import { createLocal, deleteLocal, getOwnerLocals, updateLocal } from "../services/localService";
+import { reverseGeocode } from "../services/placeLookup";
 
 // Navegación principal del perfil: actividad, guardados, preferencias y ajustes.
 const clientTabs = [
@@ -65,6 +66,8 @@ export default function PerfilCuenta({ profile, onBack }) {
   const [localSaving, setLocalSaving] = useState(false);
   const [editingLocalId, setEditingLocalId] = useState(null);
   const [deletingLocalId, setDeletingLocalId] = useState(null);
+  const [addressLookupStatus, setAddressLookupStatus] = useState("");
+  const addressLookupController = useRef(null);
   const initialBio = profile?.user_metadata?.turimar_bio || "";
   const [bio, setBio] = useState(initialBio);
   const [editingBio, setEditingBio] = useState(false);
@@ -234,13 +237,35 @@ export default function PerfilCuenta({ profile, onBack }) {
     }
   };
 
+  const selectLocalPosition = async (latitude, longitude) => {
+    addressLookupController.current?.abort();
+    const controller = new AbortController();
+    addressLookupController.current = controller;
+    setLocalForm((current) => ({
+      ...current,
+      latitud: latitude.toFixed(6),
+      longitud: longitude.toFixed(6),
+    }));
+    setAddressLookupStatus("Buscando dirección…");
+
+    try {
+      const result = await reverseGeocode(latitude, longitude, controller.signal);
+      if (controller.signal.aborted) return;
+      const address = result.address || result.name;
+      setLocalForm((current) => ({ ...current, direccion: address }));
+      setAddressLookupStatus(address ? `Dirección detectada: ${result.name}` : "No se encontró una dirección; puedes escribirla manualmente.");
+    } catch {
+      if (!controller.signal.aborted) setAddressLookupStatus("No se pudo detectar la dirección. Puedes escribirla manualmente.");
+    }
+  };
+
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
       setMessage("Este navegador no permite obtener la ubicación.");
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => setLocalForm((current) => ({ ...current, latitud: coords.latitude.toFixed(6), longitud: coords.longitude.toFixed(6) })),
+      ({ coords }) => selectLocalPosition(coords.latitude, coords.longitude),
       () => setMessage("No se pudo obtener tu ubicación. Revisa el permiso de GPS."),
       { enableHighAccuracy: true, timeout: 12000 },
     );
@@ -421,7 +446,8 @@ export default function PerfilCuenta({ profile, onBack }) {
                 </label>
                 <label>
                   Dirección
-                  <input value={localForm.direccion} onChange={(event) => setLocalForm((current) => ({ ...current, direccion: event.target.value }))} />
+                  <input value={localForm.direccion} placeholder="Haz clic en el mapa para detectar la dirección" onChange={(event) => { setLocalForm((current) => ({ ...current, direccion: event.target.value })); setAddressLookupStatus(""); }} />
+                  {addressLookupStatus && <small className="fig-local-map-status" role="status">{addressLookupStatus}</small>}
                 </label>
                 <label>
                   Horario
@@ -455,7 +481,7 @@ export default function PerfilCuenta({ profile, onBack }) {
                         latitude: Number(localForm.latitud),
                         longitude: Number(localForm.longitud),
                       }] : []}
-                      onMapClick={(latitude, longitude) => setLocalForm((current) => ({ ...current, latitud: latitude.toFixed(6), longitud: longitude.toFixed(6) }))}
+                      onMapClick={selectLocalPosition}
                     />
                   </div>
                   <small>Haz clic en el mapa para fijar el punto. Puedes ajustar las coordenadas en los campos.</small>
