@@ -501,7 +501,7 @@ export default function PerfilCuenta({ profile, onBack }) {
         </nav>
 
         {message && (
-          <p className="fig-feedback" role="status">{message}</p>
+          <p className={`fig-feedback ${message.toLowerCase().startsWith("no se pudo") || message.toLowerCase().startsWith("no se pudieron") ? "fig-feedback-error" : ""}`} role="status">{message}</p>
         )}
 
         {tab === "my-routes" && (
