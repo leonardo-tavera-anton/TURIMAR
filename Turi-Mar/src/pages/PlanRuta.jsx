@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import "./Dashboard.css";
 import RealMap from "../components/dashboard/RealMap";
+import { supabase } from "../supabaseClient";
+import { crearRutaComunidad } from "../services/routeService";
 
 const routeCategories = [
   "Todas",
@@ -158,6 +160,8 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
   const [pointComment, setPointComment] = useState("");
   const [draftTitle, setDraftTitle] = useState("Ruta personalizada del cliente");
   const [draftFilters, setDraftFilters] = useState("cultural");
+  const [routeSaving, setRouteSaving] = useState(false);
+  const [routeMessage, setRouteMessage] = useState("");
   const [draftPoints, setDraftPoints] = useState([
     { name: "Plaza de Armas", latitude: -9.0759, longitude: -78.5936, comment: "Inicio del recorrido. Tomé la combi y llegué en 10 minutos." },
     { name: "Cine Bahía", latitude: -9.0737, longitude: -78.5857, comment: "Siguiente parada. Se puede caminar 8 minutos por el boulevard." },
@@ -195,10 +199,29 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
     setPointComment("");
   };
 
-  const publishDraftRoute = () => {
+  const publishDraftRoute = async () => {
     if (!draftTitle.trim() || draftPoints.length < 2) return;
+    setRouteSaving(true);
+    setRouteMessage("");
 
-    const newRoute = {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      if (!user) throw new Error("Inicia sesión para publicar una ruta.");
+
+      const duration = Math.max(1, draftPoints.length * 35 / 60);
+      const budget = draftPoints.length * 12;
+      const savedRoute = await crearRutaComunidad({
+        usuario_id: user.id,
+        titulo_ruta: draftTitle.trim(),
+        descripcion: draftPoints.map((point) => point.comment).filter(Boolean).join(" "),
+        categoria: draftFilters,
+        duracion_total_horas: Number(duration.toFixed(2)),
+        presupuesto_total_estimado: budget,
+      }, draftPoints);
+
+      const newRoute = {
+        id: savedRoute.id,
       source: "user",
       author: "Tú",
       avatar: "YO",
@@ -207,8 +230,8 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
       votes: 1,
       comments: 0,
       category: draftFilters === "playa" ? "🏖️ Playas & Caletas" : draftFilters === "cultura" ? "🏛️ Cultura & Miradores" : draftFilters === "marina" ? "⛵ Paseos en Lancha" : "🐟 Huariques & Cebiche",
-      duration: `${Math.max(1, draftPoints.length * 35 / 60).toFixed(1)}h`,
-      budget: `S/ ${(draftPoints.length * 12).toFixed(2)}`,
+      duration: `${duration.toFixed(1)}h`,
+      budget: `S/ ${budget.toFixed(2)}`,
       steps: draftPoints.map((step, index) => ({
         icon: String(index + 1),
         name: step.name,
@@ -221,17 +244,25 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
       commenter: "Tú",
     };
 
-    setCustomRoutes((current) => [newRoute, ...current]);
-    setSelectedRoute(newRoute);
-    setActiveMapLocation(null);
-    setIsCreating(false);
-    setDraftTitle("Ruta personalizada del cliente");
-    setDraftFilters("cultural");
-    setDraftPoints([
-      { name: "Plaza de Armas", latitude: -9.0759, longitude: -78.5936, comment: "Inicio del recorrido." },
-      { name: "Cine Bahía", latitude: -9.0737, longitude: -78.5857, comment: "Punto central del recorrido." },
-      { name: "Megaplaza", latitude: -9.0714, longitude: -78.5819, comment: "Último punto antes del cierre del circuito." },
-    ]);
+      setCustomRoutes((current) => [newRoute, ...current]);
+      setSelectedRoute(newRoute);
+      setActiveMapLocation(null);
+      setIsCreating(false);
+      setDraftTitle("Ruta personalizada del cliente");
+      setDraftFilters("cultural");
+      setDraftPoints([
+        { name: "Plaza de Armas", latitude: -9.0759, longitude: -78.5936, comment: "Inicio del recorrido." },
+        { name: "Cine Bahía", latitude: -9.0737, longitude: -78.5857, comment: "Punto central del recorrido." },
+        { name: "Megaplaza", latitude: -9.0714, longitude: -78.5819, comment: "Último punto antes del cierre del circuito." },
+      ]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "No se pudo guardar la ruta.";
+      setRouteMessage(detail.includes("prepared statement")
+        ? "La base de datos del servidor está fallando (SQLx). El backend debe corregir su conexión antes de poder guardar rutas."
+        : `No se pudo publicar la ruta: ${detail}`);
+    } finally {
+      setRouteSaving(false);
+    }
   };
 
   const mapLocations = isCreating
@@ -293,7 +324,7 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
                     </div>
                     <div className="route-builder-actions">
                       <button onClick={addDraftPoint}>Agregar punto</button>
-                      <button className="primary" onClick={publishDraftRoute}>Publicar ruta</button>
+                      <button className="primary" onClick={publishDraftRoute} disabled={routeSaving}>{routeSaving ? "Publicando…" : "Publicar ruta"}</button>
                     </div>
                     <div className="route-point-list">
                       {draftPoints.map((point, index) => (
@@ -313,6 +344,7 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
                 )}
               </div>
             )}
+            {routeMessage && <p className="route-status" role="status">{routeMessage}</p>}
             {routeError && <div className="route-builder"><strong>No se pudo generar tu ruta</strong><p>{routeError}</p></div>}
           </section>
           <section className="community-routes-section">

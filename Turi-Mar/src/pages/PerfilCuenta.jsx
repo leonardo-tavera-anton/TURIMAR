@@ -104,7 +104,12 @@ export default function PerfilCuenta({ profile, onBack }) {
         setMessage("");
       })
       .catch((error) => {
-        if (active) setMessage(`No se pudieron cargar tus locales: ${error.message}`);
+        if (active) {
+          const detail = error.message.includes("prepared statement")
+            ? "La base de datos del servidor está fallando (SQLx). El backend debe corregir su conexión."
+            : error.message;
+          setMessage(`No se pudieron cargar tus locales: ${detail}`);
+        }
       })
       .finally(() => {
         if (active) setLocalsLoading(false);

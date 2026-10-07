@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./Dashboard.css";
 import ResultadosBusqueda from "./ResultadosBusqueda";
-import PlanRuta from "./PlanRuta";
+import RouteCreator from "./RouteCreator";
 import RealMap from "../components/dashboard/RealMap";
 import { supabase } from "../supabaseClient";
 import PerfilCuenta from "./PerfilCuenta";
@@ -610,7 +610,7 @@ export default function Dashboard({ onLogout, rutaData, routeError }) {
   if (selectedGuide)
     if (selectedGuide.title === "Plan de Ruta") {
       return (
-        <PlanRuta
+        <RouteCreator
           onBack={() => setSelectedGuide(null)}
           rutaData={rutaData}
           routeError={routeError}
