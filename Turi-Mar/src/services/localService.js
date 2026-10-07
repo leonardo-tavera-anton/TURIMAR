@@ -2,6 +2,10 @@ import { supabase } from "../supabaseClient";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://turimar-backend.onrender.com";
 
+function canUseSupabaseFallback(error) {
+  return error.status === 404 || error.status === 405 || error.message.includes("prepared statement");
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -33,7 +37,7 @@ async function request(path, options = {}) {
 
 export function getOwnerLocals(userId) {
   return request(`/api/v1/locales/usuario/${encodeURIComponent(userId)}`).catch(async (error) => {
-    if (!error.message.includes("prepared statement")) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
 
     const { data, error: queryError } = await supabase
       .from("locales")
@@ -58,7 +62,7 @@ export async function getPublicLocals() {
     if (!locals) throw new Error("El backend devolvió un formato inesperado para los locales.");
     return locals.filter((local) => local.activo !== false);
   } catch (error) {
-    if (!error.message.includes("prepared statement")) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
     const { data, error: queryError } = await supabase
       .from("locales")
       .select("*")
@@ -72,6 +76,15 @@ export function createLocal(local) {
   return request("/api/v1/locales", {
     method: "POST",
     body: JSON.stringify(local),
+  }).catch(async (error) => {
+    if (!canUseSupabaseFallback(error)) throw error;
+    const { data, error: insertError } = await supabase
+      .from("locales")
+      .insert(local)
+      .select()
+      .single();
+    if (insertError) throw new Error(`Render no pudo guardar el local y Supabase lo rechazó: ${insertError.message}`);
+    return data;
   });
 }
 
@@ -80,7 +93,7 @@ export function updateLocal(localId, local) {
     method: "PUT",
     body: JSON.stringify(local),
   }).catch(async (error) => {
-    if (error.status !== 404) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
     const { data, error: updateError } = await supabase
       .from("locales")
       .update(local)
@@ -98,7 +111,7 @@ export function deleteLocal(localId, userId) {
   return request(`/api/v1/locales/${encodeURIComponent(localId)}`, {
     method: "DELETE",
   }).catch(async (error) => {
-    if (error.status !== 404) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
     const { data, error: deleteError } = await supabase
       .from("locales")
       .delete()
@@ -120,7 +133,7 @@ export async function getLocalMenu(localId) {
     if (!services) throw new Error("El backend devolvió un formato inesperado para la carta.");
     return services;
   } catch (error) {
-    if (!error.message.includes("prepared statement")) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
     const { data, error: queryError } = await supabase
       .from("servicios")
       .select("*")
@@ -132,12 +145,24 @@ export async function getLocalMenu(localId) {
 }
 
 export function createLocalDish(localId, dish) {
+  const payload = {
+    local_id: localId,
+    categoria: "gastronomia",
+    tipo: "producto",
+    ...dish,
+  };
+
   return request("/api/v1/servicios", {
     method: "POST",
-    body: JSON.stringify({
-      local_id: localId,
-      categoria: "gastronomia",
-      ...dish,
-    }),
+    body: JSON.stringify(payload),
+  }).catch(async (error) => {
+    if (!canUseSupabaseFallback(error)) throw error;
+    const { data, error: insertError } = await supabase
+      .from("servicios")
+      .insert(payload)
+      .select()
+      .single();
+    if (insertError) throw new Error(`Render no pudo guardar el plato y Supabase lo rechazó: ${insertError.message}`);
+    return data;
   });
 }

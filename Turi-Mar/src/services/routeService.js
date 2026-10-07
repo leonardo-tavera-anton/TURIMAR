@@ -3,6 +3,10 @@ import { supabase } from "../supabaseClient";
 const API_URL = import.meta.env.VITE_API_URL ?? "https://turimar-backend.onrender.com";
 const ROUTE_CACHE_PREFIX = "turimar_routes_";
 
+function canUseSupabaseFallback(error) {
+  return error.status === 404 || error.status === 405 || error.message.includes("prepared statement");
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -40,10 +44,33 @@ export async function generarRutaIA(preferences = {}) {
 }
 
 export async function crearRutaComunidad(route, points) {
-  const created = await request("/api/v1/rutas", {
-    method: "POST",
-    body: JSON.stringify(route),
-  });
+  let created;
+  let createdWithSupabase = false;
+  try {
+    created = await request("/api/v1/rutas", {
+      method: "POST",
+      body: JSON.stringify(route),
+    });
+  } catch (error) {
+    if (!canUseSupabaseFallback(error)) throw error;
+    const routeRow = {
+      usuario_id: route.usuario_id,
+      titulo: route.titulo,
+      descripcion: route.descripcion ?? null,
+      categoria: route.categoria ?? null,
+      filtros: route.filtros ?? null,
+      es_publica: route.es_publica ?? true,
+    };
+    const { data, error: insertError } = await supabase
+      .from("rutas")
+      .insert(routeRow)
+      .select()
+      .single();
+    if (insertError) throw new Error(`Render no pudo guardar la ruta y Supabase la rechazó: ${insertError.message}`);
+    created = data;
+    createdWithSupabase = true;
+  }
+
   const record = created?.data ?? created?.ruta ?? created;
   const routeId = record?.id ?? record?.ruta_id ?? record?.id_ruta;
   if (!routeId) {
@@ -51,16 +78,37 @@ export async function crearRutaComunidad(route, points) {
   }
 
   for (const [index, point] of points.entries()) {
-    await request(`/api/v1/rutas/${encodeURIComponent(routeId)}/puntos`, {
-      method: "POST",
-      body: JSON.stringify({
-        orden: index + 1,
-        nombre: point.name,
-        latitud: point.latitude,
-        longitud: point.longitude,
-        comentario_tramo: point.comment,
-      }),
-    });
+    const pointRow = {
+      ruta_id: routeId,
+      orden: index + 1,
+      nombre: point.name,
+      latitud: point.latitude,
+      longitud: point.longitude,
+      comentario_tramo: point.comment ?? null,
+    };
+    if (createdWithSupabase) {
+      const { error: pointError } = await supabase.from("ruta_puntos").insert(pointRow);
+      if (pointError) throw new Error(`La ruta se creó, pero Supabase rechazó una parada: ${pointError.message}`);
+      continue;
+    }
+
+    try {
+      const requestPoint = {
+        orden: pointRow.orden,
+        nombre: pointRow.nombre,
+        latitud: pointRow.latitud,
+        longitud: pointRow.longitud,
+        comentario_tramo: pointRow.comentario_tramo,
+      };
+      await request(`/api/v1/rutas/${encodeURIComponent(routeId)}/puntos`, {
+        method: "POST",
+        body: JSON.stringify(requestPoint),
+      });
+    } catch (error) {
+      if (!canUseSupabaseFallback(error)) throw error;
+      const { error: pointError } = await supabase.from("ruta_puntos").insert(pointRow);
+      if (pointError) throw new Error(`La ruta se creó, pero Supabase rechazó una parada: ${pointError.message}`);
+    }
   }
 
   return { ...record, id: routeId };
@@ -71,7 +119,7 @@ export async function getUserRoutes(userId) {
   try {
     data = await request(`/api/v1/rutas/usuario/${encodeURIComponent(userId)}`);
   } catch (error) {
-    if (error.status !== 404 && !error.message.includes("prepared statement")) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
 
     const { data: savedRoutes, error: queryError } = await supabase
       .from("rutas")
@@ -129,7 +177,7 @@ export async function deleteUserRoute(routeId, userId) {
   try {
     await request(`/api/v1/rutas/${encodeURIComponent(routeId)}`, { method: "DELETE" });
   } catch (error) {
-    if (error.status !== 404 && error.status !== 405) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
 
     const { error: routeError } = await supabase
       .from("rutas")
@@ -154,7 +202,7 @@ export async function getRoutePoints(routeId) {
   try {
     data = await request(`/api/v1/rutas/${encodeURIComponent(routeId)}/puntos`);
   } catch (error) {
-    if (error.status !== 404 && !error.message.includes("prepared statement")) throw error;
+    if (!canUseSupabaseFallback(error)) throw error;
     const { data: savedPoints, error: queryError } = await supabase
       .from("ruta_puntos")
       .select("*")
