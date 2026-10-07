@@ -3,54 +3,26 @@ import { supabase } from "../supabaseClient";
 import RealMap from "../components/dashboard/RealMap";
 import { createLocal, deleteLocal, getOwnerLocals, updateLocal } from "../services/localService";
 import { reverseGeocode } from "../services/placeLookup";
+import { getRoutePoints, getUserRoutes } from "../services/routeService";
 
-// Navegación principal del perfil: actividad, guardados, preferencias y ajustes.
 const clientTabs = [
-  { id: "activity", icon: "◷", label: "Actividad" },
-  { id: "saved", icon: "💗", label: "Guardados" },
-  { id: "preferences", icon: "🎨", label: "Preferencias" },
+  { id: "my-routes", icon: "⌁", label: "Mis rutas" },
   { id: "settings", icon: "⚙", label: "Configuración" },
 ];
 const ownerTabs = [
-  { id: "business", icon: "⌂", label: "Resumen" },
+  { id: "my-routes", icon: "⌁", label: "Mis rutas" },
   { id: "my-locals", icon: "🏪", label: "Mis locales" },
   { id: "add-local", icon: "+", label: "Agregar local" },
   { id: "settings", icon: "⚙", label: "Configuración" },
 ];
-// Valores de ejemplo del diseño; las preferencias elegidas sí se guardan en Supabase.
-const foodOptions = ["Ceviche", "Mariscos", "Chicharrones", "Postres Locales", "Comida Criolla", "Pescado Frito"];
-const travelStyles = [
-  { id: "familiar", label: "Familiar", emoji: "👨‍👩‍👧" },
-  { id: "amigos", label: "Con Amigos", emoji: "🫂" },
-  { id: "romantico", label: "Romántico", emoji: "💗" },
-  { id: "solo", label: "Explorador Solo", emoji: "🎒" },
-];
-const defaultPlaces = [
-  ["🌴", "Isla Blanca", "Santuario Marino", "4.9", "8.5 km", "mint"],
-  ["🍽️", "Cebichería El Cevichón", "Cebichería", "4.8", "450 m", "peach"],
-  ["🏔️", "Cerro de la Paz", "Mirador 360°", "4.8", "2.8 km", "blue"],
-  ["🌿", "Vivero Forestal", "Parque Natural", "4.7", "6.2 km", "mint"],
-  ["🏨", "Hostal Malecón Azul", "Hostal Frente al Mar", "4.5", "400 m", "blue"],
-  ["🎪", "Festival Gastronómico", "Evento Local", "4.7", "5.1 km", "lilac"],
-].map(([icon, name, type, rating, distance, color]) => ({ icon, name, type, rating, distance, color }));
 
-// Recupera las preferencias del usuario o los valores iniciales del prototipo.
-function readPrefs(profile) {
-  const value = profile?.user_metadata?.turimar_preferences ?? {};
-  return {
-    foods:
-      value.foods ?? ["Ceviche", "Mariscos", "Chicharrones", "Pescado Frito"],
-    companion: value.companion ?? "amigos",
-  };
-}
-
-// Contenedor principal: el encabezado y la biografía se comparten entre las pestañas.
+// Perfil con rutas, locales del propietario y configuración de la cuenta.
 export default function PerfilCuenta({ profile, onBack }) {
   const name = profile?.user_metadata?.full_name || profile?.email?.split("@")[0] || "Usuario Turi-Mar";
   const initials = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   const [role, setRole] = useState("propietario");
   const tabs = role === "propietario" ? ownerTabs : clientTabs;
-  const [tab, setTab] = useState(role === "propietario" ? "business" : "activity");
+  const [tab, setTab] = useState("my-routes");
   const [localForm, setLocalForm] = useState({
     nombre: "",
     categoria: "restaurante",
@@ -68,18 +40,48 @@ export default function PerfilCuenta({ profile, onBack }) {
   const [deletingLocalId, setDeletingLocalId] = useState(null);
   const [addressLookupStatus, setAddressLookupStatus] = useState("");
   const addressLookupController = useRef(null);
-  const initialBio = profile?.user_metadata?.turimar_bio || "";
-  const [bio, setBio] = useState(initialBio);
-  const [editingBio, setEditingBio] = useState(false);
-  const [prefs, setPrefs] = useState(() => readPrefs(profile));
-  const places = defaultPlaces;
-  const [saved, setSaved] = useState(defaultPlaces.map(() => true));
-  const [settings, setSettings] = useState({ push: true, gps: true, language: "Español", currency: "Soles (PEN)" });
+  const [routes, setRoutes] = useState([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
+  const [routesError, setRoutesError] = useState("");
+  const [settings, setSettings] = useState(() => ({
+    push: true,
+    gps: true,
+    language: "Español",
+    currency: "Soles (PEN)",
+    ...profile?.user_metadata?.turimar_settings,
+  }));
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [newListOpen, setNewListOpen] = useState(false);
-  const [newList, setNewList] = useState("");
-  const [lists, setLists] = useState([]);
+  useEffect(() => {
+    if (tab !== "my-routes" || !profile?.id) return;
+
+    let active = true;
+    setRoutesLoading(true);
+    setRoutesError("");
+    getUserRoutes(profile.id)
+      .then(async (records) => {
+        const expandedRoutes = await Promise.all(records.map(async (route) => {
+          if (Array.isArray(route.puntos) || Array.isArray(route.points)) return route;
+          const routeId = route.id ?? route.ruta_id;
+          if (!routeId) return route;
+          try {
+            const points = await getRoutePoints(routeId);
+            return { ...route, puntos: points };
+          } catch {
+            return route;
+          }
+        }));
+        if (active) setRoutes(expandedRoutes);
+      })
+      .catch((error) => {
+        if (active) setRoutesError(`No se pudieron cargar tus rutas: ${error.message}`);
+      })
+      .finally(() => {
+        if (active) setRoutesLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [tab, profile?.id]);
   useEffect(() => {
     if (role !== "propietario" || !profile?.id) return;
 
@@ -116,40 +118,25 @@ export default function PerfilCuenta({ profile, onBack }) {
 
   // Persiste los metadatos del perfil y comunica errores o éxito en la interfaz.
   const persist = async (metadata, success) => {
-    setSaving(true); setMessage("");
-    const { error } = await supabase.auth.updateUser({ data: metadata });
-    setMessage(error ? error.message : success); setSaving(false);
-  };
-  const saveBio = async () => {
-    await persist({ turimar_bio: bio }, "Tu descripción se guardó.");
-    setEditingBio(false);
+    setSaving(true);
+    setMessage("");
+    try {
+      const { error } = await supabase.auth.updateUser({ data: metadata });
+      if (error) throw error;
+      setMessage(success);
+    } catch (error) {
+      setMessage(`No se pudo guardar la configuración: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
   const reloadLocals = async () => {
     const data = await getOwnerLocals(profile.id);
     setLocals(Array.isArray(data) ? data : data?.locales ?? data?.data ?? []);
   };
-  const toggleFood = (food) => {
-    setPrefs((current) => ({
-      ...current,
-      foods: current.foods.includes(food)
-        ? current.foods.filter((item) => item !== food)
-        : [...current.foods, food],
-    }));
-  };
-  const remainingSaved = saved.filter(Boolean).length;
-  const createList = (event) => {
-    event.preventDefault();
-    const clean = newList.trim();
-    if (!clean) return;
-
-    setLists((current) => [...current, clean]);
-    setNewList("");
-    setNewListOpen(false);
-  };
-
   const switchRole = (nextRole) => {
     setRole(nextRole);
-    setTab(nextRole === "propietario" ? "business" : "activity");
+    setTab("my-routes");
   };
 
   const resetLocalForm = () => {
@@ -292,7 +279,6 @@ export default function PerfilCuenta({ profile, onBack }) {
           <div className="fig-identity">
             <div className="fig-avatar">
               {initials}
-              <b>✓</b>
             </div>
             <div className="fig-identity-copy">
               <h1>{name}</h1>
@@ -302,23 +288,13 @@ export default function PerfilCuenta({ profile, onBack }) {
                 <em>{role === "propietario" ? "Dueño de Local" : "Turista Explorador"}</em>
               </p>
             </div>
-            <button className="fig-edit-profile" onClick={() => setEditingBio(true)}>
-              {bio ? "Editar perfil" : "Añadir descripción"}
-            </button>
           </div>
 
-          <div className={`fig-stats ${role === "propietario" ? "owner-stats" : ""}`}>
-            {role === "propietario"
-              ? [
-                  ["🏪", localsLoading ? "…" : String(locals.length), "Locales publicados"],
-                ]
-              : [
-                  ["🗺️", "24", "Lugares visitados"],
-                  ["⭐", "12", "Reseñas escritas"],
-                  ["✅", "7", "Rutas completadas"],
-                  ["💗", remainingSaved, "Guardados"],
-                ]
-            .map(([icon, count, label]) => (
+          <div className="fig-stats profile-real-stats">
+            {[
+              ["⌁", routesLoading ? "…" : String(routes.length), "Mis rutas"],
+              ...(role === "propietario" ? [["⌂", localsLoading ? "…" : String(locals.length), "Mis locales"]] : []),
+            ].map(([icon, count, label]) => (
               <div key={label}>
                 <span>{icon}</span>
                 <strong>{count}</strong>
@@ -330,14 +306,6 @@ export default function PerfilCuenta({ profile, onBack }) {
       </section>
 
       <div className="fig-profile-content">
-        {bio && !editingBio && (
-          <section className="fig-bio">
-            <span>🗨️</span>
-            <p>{bio}</p>
-            <button onClick={() => setEditingBio(true)}>Editar</button>
-          </section>
-        )}
-
         <nav className="fig-tabs" aria-label="Secciones del perfil">
           {tabs.map((item) => (
             <button
@@ -354,38 +322,62 @@ export default function PerfilCuenta({ profile, onBack }) {
           ))}
         </nav>
 
-        {editingBio && (
-          <section className="fig-box fig-bio-editor">
-            <label htmlFor="bio-editor">Sobre mí</label>
-            <textarea
-              id="bio-editor"
-              value={bio}
-              onChange={(event) => setBio(event.target.value)}
-              rows={3}
-            />
-            <div>
-              <button onClick={() => setEditingBio(false)}>Cancelar</button>
-              <button onClick={saveBio} disabled={saving}>
-                {saving ? "Guardando…" : "Guardar perfil"}
-              </button>
-            </div>
-          </section>
-        )}
-
         {message && (
           <p className="fig-feedback" role="status">{message}</p>
         )}
 
-        {role === "propietario" && tab === "business" && (
-          <section className="fig-owner-business fig-box">
-            <div className="fig-owner-header">
-              <h2>Panel del propietario</h2>
-              <span>Conectado a Render</span>
+        {tab === "my-routes" && (
+          <section className="fig-box fig-my-routes">
+            <div className="fig-section-title">
+              <h2>Mis rutas <small>({routes.length})</small></h2>
+              <button onClick={async () => {
+                setRoutesLoading(true);
+                setRoutesError("");
+                try {
+                  const records = await getUserRoutes(profile.id);
+                  const expanded = await Promise.all(records.map(async (route) => {
+                    if (Array.isArray(route.puntos) || Array.isArray(route.points)) return route;
+                    const id = route.id ?? route.ruta_id;
+                    if (!id) return route;
+                    try { return { ...route, puntos: await getRoutePoints(id) }; } catch { return route; }
+                  }));
+                  setRoutes(expanded);
+                } catch (error) {
+                  setRoutesError(`No se pudieron cargar tus rutas: ${error.message}`);
+                } finally {
+                  setRoutesLoading(false);
+                }
+              }} disabled={routesLoading}>{routesLoading ? "Actualizando…" : "Actualizar"}</button>
             </div>
-            <p>Administra tus locales y publica sus ubicaciones para que aparezcan en Turi-Mar.</p>
-            <div className="fig-owner-actions">
-              <button className="fig-secondary" onClick={() => setTab("my-locals")}>Ver mis locales</button>
-              <button className="fig-primary" onClick={() => { resetLocalForm(); setTab("add-local"); }}>＋ Agregar local</button>
+            {routesLoading ? <p className="fig-empty">Cargando tus rutas…</p> : null}
+            {routesError && <p className="fig-feedback fig-feedback-error" role="alert">{routesError}</p>}
+            {!routesLoading && !routesError && routes.length === 0 && (
+              <div className="fig-empty-state">
+                <strong>Aún no aparecen rutas en tu perfil</strong>
+                <p>Las rutas creadas con esta cuenta se mostrarán aquí cuando el backend las devuelva.</p>
+              </div>
+            )}
+            <div className="fig-user-route-list">
+              {routes.map((route) => {
+                const routeId = route.id ?? route.ruta_id;
+                const routeTitle = route.titulo ?? route.titulo_ruta ?? route.nombre ?? "Ruta sin título";
+                const points = route.puntos ?? route.points ?? [];
+                return (
+                  <article className="fig-user-route" key={routeId ?? routeTitle}>
+                    <div className="fig-user-route-heading">
+                      <div><span>RUTA</span><h3>{routeTitle}</h3></div>
+                      <small>{route.categoria ?? "Sin categoría"}</small>
+                    </div>
+                    {route.descripcion && <p>{route.descripcion}</p>}
+                    <div className="fig-user-route-meta">
+                      {route.duracion_total_horas != null && <span>{route.duracion_total_horas} h</span>}
+                      {route.presupuesto_total_estimado != null && <span>S/ {Number(route.presupuesto_total_estimado).toFixed(2)}</span>}
+                      <span>{points.length} paradas</span>
+                    </div>
+                    {points.length > 0 && <ol>{points.map((point, index) => <li key={point.id ?? `${point.nombre}-${index}`}>{point.nombre ?? point.name ?? `Parada ${index + 1}`}</li>)}</ol>}
+                  </article>
+                );
+              })}
             </div>
           </section>
         )}
@@ -494,193 +486,20 @@ export default function PerfilCuenta({ profile, onBack }) {
           </section>
         )}
 
-        {role === "cliente" && tab === "activity" && <Activity />}
-
-        {role === "cliente" && tab === "saved" && (
-          <section className="fig-saved">
-            <div className="fig-section-title">
-              <h2>Lugares Guardados <small>({remainingSaved})</small></h2>
-              <button onClick={() => setNewListOpen((open) => !open)}>＋ Crear lista</button>
-            </div>
-
-            {newListOpen && (
-              <form className="fig-list-form" onSubmit={createList}>
-                <input
-                  value={newList}
-                  onChange={(event) => setNewList(event.target.value)}
-                  placeholder="Nombre de la lista"
-                  autoFocus
-                />
-                <button>Crear</button>
-              </form>
-            )}
-
-            {lists.length > 0 && (
-              <div className="fig-custom-lists">
-                {lists.map((item) => <span key={item}>📁 {item}</span>)}
-              </div>
-            )}
-
-            <div className="fig-place-grid">
-              {places.map((place, index) =>
-                saved[index] && (
-                  <article className="fig-place" key={place.name}>
-                    <button
-                      className="fig-heart"
-                      aria-label={"Quitar " + place.name + " de guardados"}
-                      onClick={() =>
-                        setSaved((current) =>
-                          current.map((value, i) => i === index ? !value : value),
-                        )
-                      }
-                    >
-                      ♥
-                    </button>
-                    <span className={"fig-place-icon " + place.color}>
-                      {place.icon}
-                    </span>
-                    <strong>{place.name}</strong>
-                    <small>{place.type}</small>
-                    <div>
-                      <b>★ {place.rating}</b>
-                      <span>🚶 {place.distance}</span>
-                    </div>
-                  </article>
-                ),
-              )}
-            </div>
-
-            {!remainingSaved && (
-              <p className="fig-empty">
-                Aún no tienes lugares guardados. Explora el mapa para añadir favoritos.
-              </p>
-            )}
-          </section>
-        )}
-
-        {role === "cliente" && tab === "preferences" && (
-          <Preferences
-            prefs={prefs}
-            setPrefs={setPrefs}
-            toggleFood={toggleFood}
-            save={() =>
-              persist(
-                { turimar_preferences: prefs },
-                "Tus preferencias se guardaron.",
-              )
-            }
+        {tab === "settings" ? (
+          <Settings
+            settings={settings}
+            setSettings={setSettings}
+            save={() => persist({ turimar_settings: settings }, "Configuración guardada.")}
             saving={saving}
           />
-        )}
-
-        {(role === "cliente" && tab === "settings") || (role === "propietario" && tab === "settings") ? (
-          <Settings settings={settings} setSettings={setSettings} />
         ) : null}
       </div>
     </main>
   );
 }
 
-// Actividad de muestra; se podrá conectar a una tabla de historial más adelante.
-function Activity() {
-  const entries = [
-    ["🍽️", "peach", "Visitaste Cebichería El Cevichón", "Dejaste una reseña de 5 estrellas", "hace 2 días"],
-    [
-      "🏛️",
-      "blue",
-      "Completaste Ruta Atractivos Turísticos",
-      "Cerro de la Paz · Huaca San Pedro · Malecón",
-      "hace 5 días",
-    ],
-    ["🏝️", "mint", "Guardaste Isla Blanca", "Añadido a tu lista de playas favoritas", "hace 1 semana"],
-    ["🎪", "lilac", "Asististe a la Feria San Pedrito", "Plaza Central, Chimbote · Junio 2025", "hace 3 semanas"],
-  ];
-
-  return (
-    <section className="fig-activity">
-      <h2>Actividad Reciente</h2>
-      {entries.map(([icon, color, title, description, time]) => (
-        <article key={title}>
-          <span className={`fig-event-icon ${color}`}>{icon}</span>
-          <div>
-            <strong>{title}</strong>
-            <p>{description}</p>
-          </div>
-          <small>{time}</small>
-        </article>
-      ))}
-    </section>
-  );
-}
-
-// Las selecciones se guardan en los metadatos del usuario de Supabase.
-function Preferences({ prefs, setPrefs, toggleFood, save, saving }) {
-  const favoriteRoutes = [
-    ["🍽️", "Ruta Cebichera", "4x"],
-    ["🏝️", "Ruta de Playas", "3x"],
-    ["🏛️", "Atractivos Turísticos", "2x"],
-  ];
-
-  return (
-    <div className="fig-preferences">
-      <div className="fig-pref-column">
-        <section className="fig-box">
-          <h2>Gustos Gastronómicos</h2>
-          <div className="fig-foods">
-            {foodOptions.map((food) => {
-              const selected = prefs.foods.includes(food);
-              return (
-                <button
-                  key={food}
-                  className={selected ? "selected" : ""}
-                  onClick={() => toggleFood(food)}
-                >
-                  {selected ? "✓ " : ""}{food}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="fig-box">
-          <h2>Estilo de viaje</h2>
-          <div className="fig-travel">
-            {travelStyles.map((style) => (
-              <button
-                key={style.id}
-                className={prefs.companion === style.id ? "selected" : ""}
-                onClick={() =>
-                  setPrefs((current) => ({ ...current, companion: style.id }))
-                }
-              >
-                <span>{style.emoji}</span>
-                {style.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <button className="fig-save-prefs" onClick={save} disabled={saving}>
-          {saving ? "Guardando…" : "Guardar preferencias"}
-        </button>
-      </div>
-
-      <section className="fig-box fig-routes">
-        <h2>Rutas favoritas</h2>
-        {favoriteRoutes.map(([icon, title, count]) => (
-          <div key={title}>
-            <span>{icon}</span>
-            <strong>{title}</strong>
-            <b>{count}</b>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-// Preferencias locales de privacidad y visualización; se omite cuenta y mapa.
-function Settings({ settings, setSettings }) {
+function Settings({ settings, setSettings, save, saving }) {
   const toggleSetting = (key) => {
     setSettings((current) => ({ ...current, [key]: !current[key] }));
   };
@@ -724,6 +543,9 @@ function Settings({ settings, setSettings }) {
           <option>Dólares (USD)</option>
         </select>
       </label>
+      <button className="fig-save-prefs" onClick={save} disabled={saving}>
+        {saving ? "Guardando…" : "Guardar configuración"}
+      </button>
     </section>
   );
 }

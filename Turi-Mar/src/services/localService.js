@@ -31,6 +31,14 @@ export function getOwnerLocals(userId) {
   return request(`/api/v1/locales/usuario/${encodeURIComponent(userId)}`);
 }
 
+export async function getPublicLocals() {
+  const data = await request("/api/v1/locales");
+  const locals = [data, data?.locales, data?.locals, data?.data, data?.data?.locales]
+    .find(Array.isArray);
+  if (!locals) throw new Error("El backend devolvió un formato inesperado para los locales.");
+  return locals.filter((local) => local.activo !== false);
+}
+
 export function createLocal(local) {
   return request("/api/v1/locales", {
     method: "POST",

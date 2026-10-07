@@ -6,6 +6,7 @@ import RealMap from "../components/dashboard/RealMap";
 export default function ResultadosBusqueda({
   guide,
   locationsByGuide,
+  communityLocations = [],
   resultImages,
   resultDescriptions,
   resultFilters,
@@ -13,7 +14,7 @@ export default function ResultadosBusqueda({
 }) {
   // Busca los lugares de la guía actual; si no existe, usa una lista vacía.
   // Obtiene los lugares asociados con la guía seleccionada.
-  const locations = locationsByGuide[guide.title] ?? [];
+  const locations = [...(locationsByGuide[guide.title] ?? []), ...communityLocations];
 
   // Lugar que aparece seleccionado inicialmente en el mapa y en la ficha.
   const [activeLocation, setActiveLocation] = useState(null);
@@ -92,11 +93,17 @@ export default function ResultadosBusqueda({
             return (
               <button
                 className={`location-card ${activeLocation?.name === location.name ? "active" : ""}`}
-                key={location.name}
+                  key={location.id ?? location.name}
                 onClick={() => selectLocation(location)}
               >
                 <span className="location-photo">
-                  <img src={images[locationIndex % images.length]} alt="" />
+                  {location.image_url ? (
+                    <img src={location.image_url} alt="" />
+                  ) : location.isCommunityLocal ? (
+                    <span className="community-local-icon">⌂</span>
+                  ) : (
+                    <img src={images[locationIndex % images.length]} alt="" />
+                  )}
                   <em>{location.type}</em>
                 </span>
                 <span className="location-copy">
@@ -104,8 +111,8 @@ export default function ResultadosBusqueda({
                   <small>★ {location.rating} · {location.type}</small>
                   <small>⌖ {location.address}</small>
                   <span className="location-price">
-                    <b>{location.price}</b>
-                    <i>{locationIndex === 0 ? "650 m" : locationIndex === 1 ? "1.2 km" : "A 3 cuadras"}</i>
+                    <b>{location.price ?? "Consultar"}</b>
+                    <i>{location.isCommunityLocal ? "Publicado por propietario" : location.distance ?? (locationIndex === 0 ? "650 m" : locationIndex === 1 ? "1.2 km" : "A 3 cuadras")}</i>
                   </span>
                 </span>
                 <span className="location-direction">⌖</span>
@@ -131,11 +138,14 @@ export default function ResultadosBusqueda({
             <div>
               <h3>{activeLocation.name} <small>★ {activeLocation.rating}</small></h3>
               <p>{activeLocation.address}</p>
-              <b>{activeLocation.price}</b>
-              <p className="detail-meta">A 650 m · 7 min a pie</p>
+              <b>{activeLocation.price ?? "Consultar con el local"}</b>
+              {activeLocation.isCommunityLocal ? (
+                <p className="detail-meta">Publicado por un propietario de Turi-Mar</p>
+              ) : <p className="detail-meta">A 650 m · 7 min a pie</p>}
             </div>
             <button
               className="navigate-button"
+              disabled={!Number.isFinite(activeLocation.latitude) || !Number.isFinite(activeLocation.longitude)}
               onClick={() => {
                 const destination = `${activeLocation.latitude},${activeLocation.longitude}`;
                 window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`, "_blank");

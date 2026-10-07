@@ -5,6 +5,7 @@ import RouteCreator from "./RouteCreator";
 import RealMap from "../components/dashboard/RealMap";
 import { supabase } from "../supabaseClient";
 import PerfilCuenta from "./PerfilCuenta";
+import { getPublicLocals } from "../services/localService";
 
 // Mensaje inicial que aparece en el estado del radar costero.
 const DEFAULT_NOTICE = "GPS sincronizado: Caleta & Malecón Miguel Grau";
@@ -90,7 +91,43 @@ const guides = [
     extra: ["Mañana y noche", "Tradición"],
     action: "Descubrir",
   },
+  {
+    icon: "⌖",
+    tag: "Negocios de la comunidad",
+    color: "cyan",
+    title: "Locales de la comunidad",
+    text: "Explora restaurantes, hospedajes, tours y servicios publicados por sus propietarios.",
+    action: "Ver locales",
+  },
 ];
+
+function toPublicLocation(local) {
+  return {
+    ...local,
+    name: local.nombre,
+    type: local.categoria ?? local.tipo_local ?? "Local",
+    address: local.direccion ?? "Dirección no indicada",
+    latitude: Number(local.latitud),
+    longitude: Number(local.longitud),
+    image_url: local.imagen_url ?? null,
+    price: "Consultar",
+    rating: "Sin reseñas",
+    icon: "⌂",
+    isCommunityLocal: true,
+  };
+}
+
+function localMatchesGuide(local, guideTitle) {
+  const category = `${local.categoria ?? ""} ${local.tipo_local ?? ""}`.toLowerCase();
+  if (guideTitle === "Locales de la comunidad") return true;
+  if (guideTitle === "Cevicherías" || guideTitle === "Puntos de Comida") {
+    return /restaurante|gastronom|comida|cevich|bar|cafe/.test(category);
+  }
+  if (guideTitle === "Hostales") return /hotel|hostal|hospedaje|alojamiento/.test(category);
+  if (guideTitle === "Ruta de Playas") return /tour|playa|marina|servicio/.test(category);
+  if (guideTitle === "Atractivos Turísticos") return /mirador|atractivo|cultural|museo|tour/.test(category);
+  return false;
+}
 
 // Lugares mostrados en cada guía. 
 const locationsByGuide = {
@@ -450,7 +487,7 @@ function GuideCard({ guide, onSelect }) {
 }
 
 // Muestra el radar costero, sus puntos de referencia y acciones rápidas.
-function Radar({ onAction }) {
+function Radar({ onAction, locations, localsLoadError }) {
   const [locationEnabled, setLocationEnabled] = useState(true);
 
   const toggleLocation = () => {
@@ -471,6 +508,7 @@ function Radar({ onAction }) {
           </div>
         </div>
         <div className="radar-controls">
+          <span className="radar-local-count">{localsLoadError ? "Locales no disponibles" : `${locations.length} locales publicados`}</span>
           <button
             className={`gps ${locationEnabled ? "location-on" : "location-off"}`}
             onClick={toggleLocation}
@@ -481,6 +519,7 @@ function Radar({ onAction }) {
       </div>
       <div className="radar-map">
         <RealMap
+          locations={locations}
           showToolbar={false}
           locationEnabled={locationEnabled}
           onToggleLocation={toggleLocation}
@@ -590,12 +629,26 @@ export default function Dashboard({ onLogout, rutaData, routeError }) {
   const [selectedGuide, setSelectedGuide] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [communityLocals, setCommunityLocals] = useState([]);
+  const [localsLoadError, setLocalsLoadError] = useState("");
 
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (active) setProfile(user);
     });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getPublicLocals()
+      .then((locals) => {
+        if (active) setCommunityLocals(locals);
+      })
+      .catch((error) => {
+        if (active) setLocalsLoadError(error.message);
+      });
     return () => { active = false; };
   }, []);
 
@@ -623,6 +676,9 @@ export default function Dashboard({ onLogout, rutaData, routeError }) {
       <ResultadosBusqueda
         guide={selectedGuide}
         locationsByGuide={locationsByGuide}
+        communityLocations={communityLocals
+          .filter((local) => localMatchesGuide(local, selectedGuide.title))
+          .map(toPublicLocation)}
         resultImages={resultImages}
         resultDescriptions={resultDescriptions}
         resultFilters={resultFilters}
@@ -666,7 +722,11 @@ export default function Dashboard({ onLogout, rutaData, routeError }) {
         </nav>
       </header>
       <main className="content">
-        <Radar onAction={showNotice} />
+        <Radar
+          onAction={showNotice}
+          locations={communityLocals.map(toPublicLocation)}
+          localsLoadError={localsLoadError}
+        />
         <AiRoutePreview
           rutaData={rutaData}
           routeError={routeError}

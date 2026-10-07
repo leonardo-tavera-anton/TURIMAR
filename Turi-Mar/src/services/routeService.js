@@ -60,3 +60,19 @@ export async function crearRutaComunidad(route, points) {
 
   return { ...record, id: routeId };
 }
+
+export async function getUserRoutes(userId) {
+  const data = await request(`/api/v1/rutas/usuario/${encodeURIComponent(userId)}`);
+  const routes = [data, data?.rutas, data?.routes, data?.data, data?.data?.rutas, data?.data?.routes]
+    .find(Array.isArray);
+  if (!Array.isArray(routes)) {
+    throw new Error("El backend devolvió un formato inesperado para tus rutas.");
+  }
+  return routes;
+}
+
+export async function getRoutePoints(routeId) {
+  const data = await request(`/api/v1/rutas/${encodeURIComponent(routeId)}/puntos`);
+  return [data, data?.puntos, data?.points, data?.data, data?.data?.puntos, data?.data?.points]
+    .find(Array.isArray) ?? [];
+}
