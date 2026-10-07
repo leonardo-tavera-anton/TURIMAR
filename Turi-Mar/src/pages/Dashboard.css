@@ -47,7 +47,7 @@
 .coast-status button{float:right;border:0;border-radius:5px;background:#087aa9;color:#fff;font-size:9px;padding:6px 8px}
 .destination-chip{box-shadow:0 4px 14px #123b5b25;font-weight:700}
 .destination-chip i{font-style:normal;color:#7c92a8;font-weight:500}
-.location-detail{box-shadow:0 8px 24px #123b5b30}
+.location-detail{z-index:1000;box-shadow:0 8px 24px #123b5b30}
 .empty-results{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;padding:36px 22px;color:#6b829c;font-size:10px}
 .empty-results strong{color:#173653;font-size:13px}
 .route-planner-page{min-height:100vh;background:#fffaf2;color:#073552;padding:18px max(20px,calc((100vw - 1280px)/2));overflow:auto}

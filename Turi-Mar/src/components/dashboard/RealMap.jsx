@@ -11,28 +11,31 @@ import "leaflet/dist/leaflet.css";
 
 const CHIMBOTE_CENTER = [-9.075, -78.594];
 
-function MapPositionController({ position }) {
+function MapPositionController({ position, fitPositions, zoomToPosition = false }) {
   const map = useMap();
+  const fitKey = fitPositions?.map(([latitude, longitude]) => `${latitude},${longitude}`).join("|") ?? "";
 
   useEffect(() => {
-    if (position) {
+    if (zoomToPosition && position) {
+      map.flyTo(position, 17, { duration: 1.1 });
+    } else if (fitPositions?.length > 1) {
+      map.fitBounds(fitPositions, { padding: [48, 48], maxZoom: 14 });
+    } else if (fitPositions?.length === 1) {
+      map.setView(fitPositions[0], 14);
+    } else if (position) {
       map.flyTo(position, 14, { duration: 1.2 });
     }
-  }, [map, position]);
+  }, [map, position?.[0], position?.[1], fitKey, zoomToPosition]);
 
   return null;
 }
 
-function getLocationPosition(location, index) {
-  if (location.latitude && location.longitude) {
+function getLocationPosition(location) {
+  if (Number.isFinite(location?.latitude) && Number.isFinite(location?.longitude)) {
     return [location.latitude, location.longitude];
   }
 
-  // Posiciones temporales hasta registrar las coordenadas reales de cada lugar.
-  return [
-    CHIMBOTE_CENTER[0] + (index - 1) * 0.006,
-    CHIMBOTE_CENTER[1] + (index - 1) * 0.008,
-  ];
+  return null;
 }
 
 export default function RealMap({
@@ -42,6 +45,10 @@ export default function RealMap({
   showToolbar = true,
   locationEnabled = true,
   onToggleLocation = () => {},
+  focusActiveLocation = false,
+  fitLocations = false,
+  zoomToActiveLocation = false,
+  showUserMarker = true,
 }) {
   const [userPosition, setUserPosition] = useState(null);
   const [locationError, setLocationError] = useState("");
@@ -69,6 +76,12 @@ export default function RealMap({
   }, [locationEnabled]);
 
   const center = userPosition ?? CHIMBOTE_CENTER;
+  const mapFocus = (focusActiveLocation || zoomToActiveLocation)
+    ? getLocationPosition(activeLocation)
+    : userPosition;
+  const fitPositions = fitLocations
+    ? locations.map(getLocationPosition).filter(Boolean)
+    : null;
 
   return (
     <div className="real-map-wrapper">
@@ -76,6 +89,7 @@ export default function RealMap({
         <MapContainer
           center={center}
           zoom={13}
+          maxZoom={19}
           zoomControl={false}
           className="real-map"
           scrollWheelZoom
@@ -83,11 +97,17 @@ export default function RealMap({
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxNativeZoom={19}
+            maxZoom={19}
           />
           <ZoomControl position="topright" />
-          <MapPositionController position={userPosition} />
+          <MapPositionController
+            position={mapFocus}
+            fitPositions={fitPositions}
+            zoomToPosition={zoomToActiveLocation}
+          />
 
-          {userPosition && (
+          {showUserMarker && userPosition && (
             <CircleMarker
               center={userPosition}
               radius={9}
@@ -97,8 +117,9 @@ export default function RealMap({
             </CircleMarker>
           )}
 
-          {locations.map((location, index) => {
-            const position = getLocationPosition(location, index);
+          {locations.map((location) => {
+            const position = getLocationPosition(location);
+            if (!position) return null;
             const isActive = activeLocation?.name === location.name;
 
             return (

@@ -123,6 +123,9 @@ const locationsByGuide = {
   Cebicherías: [
     {
       name: "Cevicheria Mil Sabores",
+      // Coordenadas obtenidas del Plus Code WCGJ+HFX compartido por el usuario.
+      latitude: -9.0731375,
+      longitude: -78.568859375,
       type: "Cebichería",
       address: "Av. Precursores, Chimbote",
       price: "Desde S/ 30",
@@ -132,6 +135,9 @@ const locationsByGuide = {
     {
       name: "Cevicheria Rico Chimbote",
       type: "Mariscos",
+      // Coordenadas decodificadas del Plus Code WCH4+MQ compartido por el usuario.
+      latitude: -9.070875,
+      longitude: -78.593125,
       address: "Jr. Enrique Palacios 701",
       price: "Desde S/ 25",
       rating: "4.2",
@@ -140,6 +146,9 @@ const locationsByGuide = {
     {
       name: "Cevichería Taypa",
       type: "Cocina marina",
+      // Coordenadas decodificadas del Plus Code WCFH+RP compartido por el usuario.
+      latitude: -9.0755,
+      longitude: -78.57075,
       address: "Caleta Chimbote",
       price: "Desde S/ 22",
       rating: "4.5",
@@ -155,6 +164,9 @@ const locationsByGuide = {
     },
     {
       name: "Cevichela",
+      // Coordenadas decodificadas del Plus Code VFH9+C9V en Nuevo Chimbote.
+      latitude: -9.1210625,
+      longitude: -78.531609375,
       type: "Cebichería",
       address: "Frente a la Plaza Mayor, Urb. Mariscal Luzuriaga Mz C Lt. 12, Nuevo Chimbote",
       price: "Consultar precio",

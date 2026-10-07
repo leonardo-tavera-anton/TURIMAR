@@ -16,7 +16,13 @@ export default function ResultadosBusqueda({
   const locations = locationsByGuide[guide.title] ?? [];
 
   // Lugar que aparece seleccionado inicialmente en el mapa y en la ficha.
-  const [activeLocation, setActiveLocation] = useState(locations[0]);
+  const [activeLocation, setActiveLocation] = useState(null);
+  const [zoomOnSelection, setZoomOnSelection] = useState(false);
+
+  const selectLocation = (location) => {
+    setActiveLocation(location);
+    setZoomOnSelection(true);
+  };
 
   // Solo una pestaña de ciudad puede estar activa a la vez.
   const [activeTab, setActiveTab] = useState("Todos");
@@ -34,13 +40,24 @@ export default function ResultadosBusqueda({
     return true;
   });
 
+  // El mapa muestra solo los resultados visibles y con coordenadas verificadas.
+  const hasMappableLocations = visibleLocations.some(
+    ({ latitude, longitude }) => Number.isFinite(latitude) && Number.isFinite(longitude),
+  );
+
+  const changeTab = (tab) => {
+    setActiveTab(tab);
+    setZoomOnSelection(false);
+    setActiveLocation(null);
+  };
+
   // Renderiza el panel lateral y el mapa de resultados.
   return (
     <div className="locations-screen">
       <aside className="locations-list">
         <div className="locations-top">
           <button className="locations-back" onClick={onBack}>← Volver al lobby turístico</button>
-          <span>{locations.length} disponibles</span>
+          <span>{visibleLocations.length} disponibles</span>
         </div>
         <div className="results-search">⌕ <span>{guide.title}</span><b>×</b></div>
         <div className="results-heading">
@@ -48,11 +65,11 @@ export default function ResultadosBusqueda({
             <h2>Resultados de {guide.title}</h2>
             <p>{resultDescriptions[guide.title] ?? "Explora opciones seleccionadas para tu próxima ruta."}</p>
           </div>
-          <span className="verified-count">✓ {locations.length} verificados</span>
+          <span className="verified-count">✓ {visibleLocations.length} verificados</span>
         </div>
         <div className="location-tabs">
           {["Todos", "Chimbote", "Nuevo Chimbote"].map((tab) => (
-            <button className={activeTab === tab ? "selected" : ""} key={tab} onClick={() => setActiveTab(tab)}>
+            <button className={activeTab === tab ? "selected" : ""} key={tab} onClick={() => changeTab(tab)}>
               {tab}
             </button>
           ))}
@@ -76,7 +93,7 @@ export default function ResultadosBusqueda({
               <button
                 className={`location-card ${activeLocation?.name === location.name ? "active" : ""}`}
                 key={location.name}
-                onClick={() => setActiveLocation(location)}
+                onClick={() => selectLocation(location)}
               >
                 <span className="location-photo">
                   <img src={images[locationIndex % images.length]} alt="" />
@@ -99,14 +116,17 @@ export default function ResultadosBusqueda({
       </aside>
       <main className="locations-map">
         <RealMap
-          locations={locations}
+          locations={visibleLocations}
           activeLocation={activeLocation}
-          onSelectLocation={setActiveLocation}
+          onSelectLocation={selectLocation}
+          fitLocations={hasMappableLocations}
+          zoomToActiveLocation={zoomOnSelection}
+          showUserMarker={false}
           onToggleLocation={() => {}}
         />
         {activeLocation && (
           <section className="location-detail">
-            <button className="close-detail" onClick={onBack}>×</button>
+            <button className="close-detail" aria-label="Volver a todas las secciones" title="Volver a todas las secciones" onClick={onBack}>×</button>
             <span className="detail-photo">{activeLocation.icon}</span>
             <div>
               <h3>{activeLocation.name} <small>★ {activeLocation.rating}</small></h3>
@@ -116,7 +136,10 @@ export default function ResultadosBusqueda({
             </div>
             <button
               className="navigate-button"
-              onClick={() => window.open("https://www.google.com/maps/dir/?api=1&destination=-9.075,-78.594", "_blank")}
+              onClick={() => {
+                const destination = `${activeLocation.latitude},${activeLocation.longitude}`;
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`, "_blank");
+              }}
             >
               ⌖ Iniciar navegación
             </button>
