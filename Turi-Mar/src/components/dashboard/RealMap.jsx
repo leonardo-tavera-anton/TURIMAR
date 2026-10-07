@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import {
   CircleMarker,
   MapContainer,
+  Polyline,
   Popup,
   TileLayer,
   useMap,
+  useMapEvents,
   ZoomControl,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -30,6 +32,14 @@ function MapPositionController({ position, fitPositions, zoomToPosition = false 
   return null;
 }
 
+function MapClickHandler({ onMapClick }) {
+  useMapEvents({
+    click: ({ latlng }) => onMapClick?.(latlng.lat, latlng.lng),
+  });
+
+  return null;
+}
+
 function getLocationPosition(location) {
   if (Number.isFinite(location?.latitude) && Number.isFinite(location?.longitude)) {
     return [location.latitude, location.longitude];
@@ -49,12 +59,15 @@ export default function RealMap({
   fitLocations = false,
   zoomToActiveLocation = false,
   showUserMarker = true,
+  requestUserLocation = true,
+  routeLine = [],
+  onMapClick,
 }) {
   const [userPosition, setUserPosition] = useState(null);
   const [locationError, setLocationError] = useState("");
 
   useEffect(() => {
-    if (!locationEnabled) {
+    if (!locationEnabled || !requestUserLocation) {
       setUserPosition(null);
       setLocationError("");
       return undefined;
@@ -73,7 +86,7 @@ export default function RealMap({
       () => setLocationError("Activa el permiso de ubicación para mostrarte en el mapa."),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
-  }, [locationEnabled]);
+  }, [locationEnabled, requestUserLocation]);
 
   const center = userPosition ?? CHIMBOTE_CENTER;
   const mapFocus = (focusActiveLocation || zoomToActiveLocation)
@@ -106,6 +119,7 @@ export default function RealMap({
             fitPositions={fitPositions}
             zoomToPosition={zoomToActiveLocation}
           />
+          {onMapClick && <MapClickHandler onMapClick={onMapClick} />}
 
           {showUserMarker && userPosition && (
             <CircleMarker
@@ -115,6 +129,13 @@ export default function RealMap({
             >
               <Popup>Tu ubicación actual</Popup>
             </CircleMarker>
+          )}
+
+          {routeLine.length > 1 && (
+            <Polyline
+              positions={routeLine}
+              pathOptions={{ color: "#0d7ca8", weight: 5, opacity: 0.9, lineCap: "round" }}
+            />
           )}
 
           {locations.map((location) => {

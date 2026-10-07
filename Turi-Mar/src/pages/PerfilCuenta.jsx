@@ -1,11 +1,21 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
+import RealMap from "../components/dashboard/RealMap";
+import { createLocal, getOwnerLocals, updateLocal } from "../services/localService";
 
 // Navegación principal del perfil: actividad, guardados, preferencias y ajustes.
-const tabs = [
+const clientTabs = [
   { id: "activity", icon: "◷", label: "Actividad" },
   { id: "saved", icon: "💗", label: "Guardados" },
   { id: "preferences", icon: "🎨", label: "Preferencias" },
+  { id: "settings", icon: "⚙", label: "Configuración" },
+];
+const ownerTabs = [
+  { id: "business", icon: "⌂", label: "Resumen" },
+  { id: "my-locals", icon: "🏪", label: "Mis locales" },
+  { id: "add-local", icon: "+", label: "Agregar local" },
+  { id: "services", icon: "🧾", label: "Servicios" },
+  { id: "analytics", icon: "📊", label: "Estadísticas" },
   { id: "settings", icon: "⚙", label: "Configuración" },
 ];
 // Valores de ejemplo del diseño; las preferencias elegidas sí se guardan en Supabase.
@@ -39,7 +49,35 @@ function readPrefs(profile) {
 export default function PerfilCuenta({ profile, onBack }) {
   const name = profile?.user_metadata?.full_name || "Jorge Ramírez";
   const initials = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
-  const [tab, setTab] = useState("activity");
+  const [role, setRole] = useState("propietario");
+  const tabs = role === "propietario" ? ownerTabs : clientTabs;
+  const [tab, setTab] = useState(role === "propietario" ? "business" : "activity");
+  const [localForm, setLocalForm] = useState({
+    nombre: "",
+    categoria: "restaurante",
+    direccion: "",
+    horario: "",
+    telefono: "",
+    descripcion: "",
+    latitud: "",
+    longitud: "",
+  });
+  const [locals, setLocals] = useState([]);
+  const [localsLoading, setLocalsLoading] = useState(false);
+  const [localSaving, setLocalSaving] = useState(false);
+  const [editingLocalId, setEditingLocalId] = useState(null);
+  const [serviceForm, setServiceForm] = useState({
+    nombre: "",
+    categoria: "gastronomia",
+    precio: "",
+    descripcion: "",
+  });
+  const [showServiceForm, setShowServiceForm] = useState(false);
+  const [services, setServices] = useState([
+    { nombre: "Ceviche mixto", precio: "S/ 35.00", categoria: "gastronomía" },
+    { nombre: "Tours a la bahía", precio: "S/ 60.00", categoria: "turismo" },
+    { nombre: "Alquiler de toldo", precio: "S/ 50.00", categoria: "servicio" },
+  ]);
   const initialBio =
     profile?.user_metadata?.turimar_bio ||
     "Amante de la gastronomía costeña y los atardeceres en la Bahía El Ferrol. Siempre buscando el mejor ceviche.";
@@ -54,6 +92,26 @@ export default function PerfilCuenta({ profile, onBack }) {
   const [newListOpen, setNewListOpen] = useState(false);
   const [newList, setNewList] = useState("");
   const [lists, setLists] = useState([]);
+  useEffect(() => {
+    if (role !== "propietario" || tab !== "my-locals" || !profile?.id) return;
+
+    let active = true;
+    setLocalsLoading(true);
+    getOwnerLocals(profile.id)
+      .then((data) => {
+        if (!active) return;
+        setLocals(Array.isArray(data) ? data : data?.locales ?? data?.data ?? []);
+        setMessage("");
+      })
+      .catch((error) => {
+        if (active) setMessage(`No se pudieron cargar tus locales: ${error.message}`);
+      })
+      .finally(() => {
+        if (active) setLocalsLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [role, tab, profile?.id]);
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return "Marzo 2024";
 
@@ -92,6 +150,103 @@ export default function PerfilCuenta({ profile, onBack }) {
     setNewListOpen(false);
   };
 
+  const switchRole = (nextRole) => {
+    setRole(nextRole);
+    setTab(nextRole === "propietario" ? "business" : "activity");
+  };
+
+  const resetLocalForm = () => {
+    setLocalForm({ nombre: "", categoria: "restaurante", direccion: "", horario: "", telefono: "", descripcion: "", latitud: "", longitud: "" });
+    setEditingLocalId(null);
+  };
+
+  const saveLocal = async () => {
+    const latitude = Number(localForm.latitud);
+    const longitude = Number(localForm.longitud);
+    if (!profile?.id) {
+      setMessage("Inicia sesión nuevamente para asociar el local a tu cuenta.");
+      return;
+    }
+    if (!localForm.nombre.trim() || !localForm.direccion.trim()) {
+      setMessage("Completa el nombre y la dirección del local.");
+      return;
+    }
+    if (!localForm.latitud.trim() || !localForm.longitud.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      setMessage("Selecciona la ubicación en el mapa o ingresa coordenadas válidas.");
+      return;
+    }
+
+    const payload = {
+      usuario_id: profile.id,
+      nombre: localForm.nombre.trim(),
+      categoria: localForm.categoria,
+      descripcion: localForm.descripcion.trim(),
+      direccion: localForm.direccion.trim(),
+      horario: localForm.horario.trim(),
+      telefono: localForm.telefono.trim(),
+      latitud: latitude,
+      longitud: longitude,
+    };
+
+    setLocalSaving(true);
+    setMessage("");
+    try {
+      if (editingLocalId) await updateLocal(editingLocalId, payload);
+      else await createLocal(payload);
+      setMessage(editingLocalId ? "Local actualizado." : "Local publicado correctamente.");
+      resetLocalForm();
+      setTab("my-locals");
+    } catch (error) {
+      setMessage(`No se pudo guardar el local: ${error.message}`);
+    } finally {
+      setLocalSaving(false);
+    }
+  };
+
+  const editLocal = (local) => {
+    setLocalForm({
+      nombre: local.nombre ?? "",
+      categoria: local.categoria ?? "restaurante",
+      direccion: local.direccion ?? "",
+      horario: local.horario ?? "",
+      telefono: local.telefono ?? "",
+      descripcion: local.descripcion ?? "",
+      latitud: String(local.latitud ?? local.latitude ?? ""),
+      longitud: String(local.longitud ?? local.longitude ?? ""),
+    });
+    setEditingLocalId(local.id);
+    setMessage("");
+    setTab("add-local");
+  };
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setMessage("Este navegador no permite obtener la ubicación.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => setLocalForm((current) => ({ ...current, latitud: coords.latitude.toFixed(6), longitud: coords.longitude.toFixed(6) })),
+      () => setMessage("No se pudo obtener tu ubicación. Revisa el permiso de GPS."),
+      { enableHighAccuracy: true, timeout: 12000 },
+    );
+  };
+
+  const addService = () => {
+    const cleanName = serviceForm.nombre.trim();
+    if (!cleanName || !serviceForm.precio.trim()) return;
+
+    setServices((current) => [
+      {
+        nombre: cleanName,
+        precio: `S/ ${Number(serviceForm.precio).toFixed(2)}`,
+        categoria: serviceForm.categoria,
+      },
+      ...current,
+    ]);
+    setServiceForm({ nombre: "", categoria: "gastronomia", precio: "", descripcion: "" });
+    setShowServiceForm(false);
+  };
+
   return (
     <main className="fig-profile">
       <header className="fig-profile-bar">
@@ -106,6 +261,10 @@ export default function PerfilCuenta({ profile, onBack }) {
 
       <section className="fig-profile-hero">
         <div className="fig-profile-inner">
+          <div className="fig-role-switch">
+            <button className={role === "cliente" ? "active" : ""} onClick={() => switchRole("cliente")}>Cliente</button>
+            <button className={role === "propietario" ? "active" : ""} onClick={() => switchRole("propietario")}>Propietario</button>
+          </div>
           <div className="fig-identity">
             <div className="fig-avatar">
               {initials}
@@ -118,7 +277,7 @@ export default function PerfilCuenta({ profile, onBack }) {
               </a>
               <p>
                 📍 Chimbote, Áncash · Miembro desde {memberSince} ·
-                <em>Turista Explorador</em>
+                <em>{role === "propietario" ? "Dueño de Local" : "Turista Explorador"}</em>
               </p>
             </div>
             <button className="fig-edit-profile" onClick={() => setEditingBio(true)}>
@@ -127,12 +286,20 @@ export default function PerfilCuenta({ profile, onBack }) {
           </div>
 
           <div className="fig-stats">
-            {[
-              ["🗺️", "24", "Lugares visitados"],
-              ["⭐", "12", "Reseñas escritas"],
-              ["✅", "7", "Rutas completadas"],
-              ["💗", remainingSaved, "Guardados"],
-            ].map(([icon, count, label]) => (
+            {role === "propietario"
+              ? [
+                  ["🏪", "3", "Locales activos"],
+                  ["⭐", "48", "Reseñas recibidas"],
+                  ["📦", "12", "Servicios publicados"],
+                  ["💬", "9", "Mensajes"],
+                ]
+              : [
+                  ["🗺️", "24", "Lugares visitados"],
+                  ["⭐", "12", "Reseñas escritas"],
+                  ["✅", "7", "Rutas completadas"],
+                  ["💗", remainingSaved, "Guardados"],
+                ]
+            .map(([icon, count, label]) => (
               <div key={label}>
                 <span>{icon}</span>
                 <strong>{count}</strong>
@@ -188,9 +355,189 @@ export default function PerfilCuenta({ profile, onBack }) {
           <p className="fig-feedback" role="status">{message}</p>
         )}
 
-        {tab === "activity" && <Activity />}
+        {role === "propietario" && tab === "business" && (
+          <section className="fig-owner-business fig-box">
+            <div className="fig-owner-header">
+              <h2>Panel del propietario</h2>
+              <span>Conectado a Render</span>
+            </div>
+            <p>Administra tus locales y publica sus ubicaciones para que aparezcan en Turi-Mar.</p>
+            <div className="fig-owner-actions">
+              <button className="fig-secondary" onClick={() => setTab("my-locals")}>Ver mis locales</button>
+              <button className="fig-primary" onClick={() => { resetLocalForm(); setTab("add-local"); }}>＋ Agregar local</button>
+            </div>
+          </section>
+        )}
 
-        {tab === "saved" && (
+        {role === "propietario" && tab === "my-locals" && (
+          <section className="fig-owner-locals fig-box">
+            <div className="fig-section-title">
+              <h2>Mis locales <small>({locals.length})</small></h2>
+              <button onClick={() => { resetLocalForm(); setTab("add-local"); }}>＋ Agregar local</button>
+            </div>
+            {localsLoading ? <p className="fig-empty">Cargando locales…</p> : locals.length ? (
+              <div className="fig-local-list">
+                {locals.map((local) => (
+                  <article className="fig-local-item" key={local.id}>
+                    <div>
+                      <strong>{local.nombre ?? "Local sin nombre"}</strong>
+                      <small>{local.categoria ?? "Local"} · {local.direccion ?? "Sin dirección"}</small>
+                      <small>{local.latitud ?? local.latitude}, {local.longitud ?? local.longitude}</small>
+                    </div>
+                    <button className="fig-secondary" onClick={() => editLocal(local)}>Editar</button>
+                  </article>
+                ))}
+              </div>
+            ) : <p className="fig-empty">Todavía no tienes locales publicados.</p>}
+          </section>
+        )}
+
+        {role === "propietario" && tab === "add-local" && (
+          <section className="fig-owner-card fig-add-local">
+            <div className="fig-owner-header">
+              <h2>{editingLocalId ? "Editar local" : "Agregar local"}</h2>
+              <span>Ubicación requerida</span>
+            </div>
+              <div className="fig-owner-form">
+                <label>
+                  Nombre del local
+                  <input value={localForm.nombre} onChange={(event) => setLocalForm((current) => ({ ...current, nombre: event.target.value }))} />
+                </label>
+                <label>
+                  Categoría
+                  <select value={localForm.categoria} onChange={(event) => setLocalForm((current) => ({ ...current, categoria: event.target.value }))}>
+                    <option value="restaurante">Restaurante</option>
+                    <option value="hotel">Hotel</option>
+                    <option value="tour">Tour</option>
+                    <option value="tienda">Tienda</option>
+                    <option value="mirador">Mirador</option>
+                    <option value="servicio">Servicio</option>
+                  </select>
+                </label>
+                <label className="full-width">
+                  Descripción
+                  <textarea value={localForm.descripcion} rows={3} onChange={(event) => setLocalForm((current) => ({ ...current, descripcion: event.target.value }))} />
+                </label>
+                <label>
+                  Dirección
+                  <input value={localForm.direccion} onChange={(event) => setLocalForm((current) => ({ ...current, direccion: event.target.value }))} />
+                </label>
+                <label>
+                  Horario
+                  <input value={localForm.horario} onChange={(event) => setLocalForm((current) => ({ ...current, horario: event.target.value }))} />
+                </label>
+                <label>
+                  Teléfono
+                  <input value={localForm.telefono} onChange={(event) => setLocalForm((current) => ({ ...current, telefono: event.target.value }))} />
+                </label>
+                <label>
+                  Latitud
+                  <input type="number" step="any" value={localForm.latitud} onChange={(event) => setLocalForm((current) => ({ ...current, latitud: event.target.value }))} />
+                </label>
+                <label>
+                  Longitud
+                  <input type="number" step="any" value={localForm.longitud} onChange={(event) => setLocalForm((current) => ({ ...current, longitud: event.target.value }))} />
+                </label>
+                <div className="fig-local-map-block full-width">
+                  <div className="fig-local-map-heading">
+                    <strong>Marca la ubicación exacta</strong>
+                    <button type="button" className="fig-secondary" onClick={useCurrentLocation}>◎ Usar mi ubicación</button>
+                  </div>
+                  <div className="fig-local-map">
+                    <RealMap
+                      showToolbar={false}
+                      showUserMarker={false}
+                      requestUserLocation={false}
+                      locations={localForm.latitud && localForm.longitud ? [{
+                        name: localForm.nombre || "Ubicación del local",
+                        address: localForm.direccion,
+                        latitude: Number(localForm.latitud),
+                        longitude: Number(localForm.longitud),
+                      }] : []}
+                      onMapClick={(latitude, longitude) => setLocalForm((current) => ({ ...current, latitud: latitude.toFixed(6), longitud: longitude.toFixed(6) }))}
+                    />
+                  </div>
+                  <small>Haz clic en el mapa para fijar el punto. Puedes ajustar las coordenadas en los campos.</small>
+                </div>
+              </div>
+              <div className="fig-owner-actions">
+                <button className="fig-secondary" onClick={() => { resetLocalForm(); setTab("my-locals"); }}>Cancelar</button>
+                <button className="fig-primary" onClick={saveLocal} disabled={localSaving}>{localSaving ? "Guardando…" : editingLocalId ? "Guardar cambios" : "Publicar local"}</button>
+              </div>
+          </section>
+        )}
+
+        {role === "propietario" && tab === "services" && (
+          <section className="fig-owner-services fig-box">
+            <h2>Servicios del local</h2>
+            <div className="fig-service-list">
+              {services.map((service, index) => (
+                <div key={`${service.nombre}-${index}`} className="fig-service-item">
+                  <div>
+                    <strong>{service.nombre}</strong>
+                    <small>{service.categoria}</small>
+                  </div>
+                  <b>{service.precio}</b>
+                </div>
+              ))}
+            </div>
+
+            {showServiceForm ? (
+              <div className="fig-service-form">
+                <input
+                  value={serviceForm.nombre}
+                  onChange={(event) => setServiceForm((current) => ({ ...current, nombre: event.target.value }))}
+                  placeholder="Nombre del servicio"
+                />
+                <select
+                  value={serviceForm.categoria}
+                  onChange={(event) => setServiceForm((current) => ({ ...current, categoria: event.target.value }))}
+                >
+                  <option value="gastronomia">Gastronomía</option>
+                  <option value="turismo">Turismo</option>
+                  <option value="servicio">Servicio</option>
+                  <option value="hotel">Hotel</option>
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={serviceForm.precio}
+                  onChange={(event) => setServiceForm((current) => ({ ...current, precio: event.target.value }))}
+                  placeholder="Precio"
+                />
+                <textarea
+                  value={serviceForm.descripcion}
+                  rows={2}
+                  onChange={(event) => setServiceForm((current) => ({ ...current, descripcion: event.target.value }))}
+                  placeholder="Descripción del servicio"
+                />
+                <div className="fig-service-form-actions">
+                  <button className="fig-secondary" onClick={() => setShowServiceForm(false)}>Cancelar</button>
+                  <button className="fig-primary" onClick={addService}>Guardar servicio</button>
+                </div>
+              </div>
+            ) : (
+              <button className="fig-add-service" onClick={() => setShowServiceForm(true)}>＋ Agregar servicio</button>
+            )}
+          </section>
+        )}
+
+        {role === "propietario" && tab === "analytics" && (
+          <section className="fig-owner-analytics fig-box">
+            <h2>Estadísticas del negocio</h2>
+            <div className="fig-analytics-grid">
+              <div><strong>248</strong><span>Visitantes</span></div>
+              <div><strong>4.8</strong><span>Calificación</span></div>
+              <div><strong>18</strong><span>Reservas</span></div>
+              <div><strong>94%</strong><span>Retención</span></div>
+            </div>
+          </section>
+        )}
+
+        {role === "cliente" && tab === "activity" && <Activity />}
+
+        {role === "cliente" && tab === "saved" && (
           <section className="fig-saved">
             <div className="fig-section-title">
               <h2>Lugares Guardados <small>({remainingSaved})</small></h2>
@@ -252,7 +599,7 @@ export default function PerfilCuenta({ profile, onBack }) {
           </section>
         )}
 
-        {tab === "preferences" && (
+        {role === "cliente" && tab === "preferences" && (
           <Preferences
             prefs={prefs}
             setPrefs={setPrefs}
@@ -267,9 +614,9 @@ export default function PerfilCuenta({ profile, onBack }) {
           />
         )}
 
-        {tab === "settings" && (
+        {(role === "cliente" && tab === "settings") || (role === "propietario" && tab === "settings") ? (
           <Settings settings={settings} setSettings={setSettings} />
-        )}
+        ) : null}
       </div>
     </main>
   );

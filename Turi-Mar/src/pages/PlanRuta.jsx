@@ -10,6 +10,14 @@ const routeCategories = [
   "🏛️ Cultura & Miradores",
 ];
 
+const suggestedPlaces = [
+  { name: "Plaza de Armas", latitude: -9.0759, longitude: -78.5936, description: "Punto de inicio del recorrido." },
+  { name: "Cine Bahía", latitude: -9.0737, longitude: -78.5857, description: "Cine y punto de encuentro central." },
+  { name: "Megaplaza", latitude: -9.0714, longitude: -78.5819, description: "Centro comercial y paso importante." },
+  { name: "Malecón", latitude: -9.0781, longitude: -78.5984, description: "Mirador costero y paseo final." },
+  { name: "Mercado Central", latitude: -9.0772, longitude: -78.5952, description: "Mercado de alimentos y recuerdos." },
+  { name: "Mirador de la Bahía", latitude: -9.0824, longitude: -78.5969, description: "Vista panorámica del puerto." },
+];
 
 const communityRoutes = [
   {
@@ -141,17 +149,29 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
     };
   }, [rutaData]);
 
-  const availableRoutes = generatedRoute
-    ? [generatedRoute, ...communityRoutes]
-    : communityRoutes;
-
+  const [customRoutes, setCustomRoutes] = useState([]);
   const [activeCategory, setActiveCategory] = useState("Todas");
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [userRole, setUserRole] = useState("cliente");
+  const [selectedPoint, setSelectedPoint] = useState(suggestedPlaces[0].name);
+  const [pointComment, setPointComment] = useState("");
+  const [draftTitle, setDraftTitle] = useState("Ruta personalizada del cliente");
+  const [draftFilters, setDraftFilters] = useState("cultural");
+  const [draftPoints, setDraftPoints] = useState([
+    { name: "Plaza de Armas", latitude: -9.0759, longitude: -78.5936, comment: "Inicio del recorrido. Tomé la combi y llegué en 10 minutos." },
+    { name: "Cine Bahía", latitude: -9.0737, longitude: -78.5857, comment: "Siguiente parada. Se puede caminar 8 minutos por el boulevard." },
+    { name: "Megaplaza", latitude: -9.0714, longitude: -78.5819, comment: "Luego de la plaza tomé el recorrido por la zona comercial y el centro." },
+  ]);
   const [selectedRoute, setSelectedRoute] = useState(
     generatedRoute ?? communityRoutes[0]
   );
   const [activeMapLocation, setActiveMapLocation] = useState(null);
+
+  const availableRoutes = useMemo(() => {
+    const baseRoutes = generatedRoute ? [generatedRoute, ...communityRoutes] : [...communityRoutes];
+    return [...customRoutes, ...baseRoutes];
+  }, [customRoutes, generatedRoute]);
 
   const filteredRoutes = useMemo(() => availableRoutes.filter((route) => {
     const matchesCategory = activeCategory === "Todas" || route.category === activeCategory;
@@ -159,30 +179,140 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
     return matchesCategory && matchesSearch;
   }), [activeCategory, availableRoutes, search]);
 
-  const routeMapLocations = selectedRoute.steps.map((step, index) => ({
-    name: step.name,
-    type: `Parada ${index + 1}`,
-    address: step.description ?? `Tramo ${index + 1} de la ruta comunitaria`,
-    latitude: step.latitude,
-    longitude: step.longitude,
-    icon: step.icon,
-  }));
+  const addDraftPoint = () => {
+    const place = suggestedPlaces.find((item) => item.name === selectedPoint);
+    if (!place) return;
 
-  const selectedMapLocation = activeMapLocation ?? routeMapLocations[0];
+    setDraftPoints((current) => [
+      ...current,
+      {
+        name: place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        comment: pointComment || `Parada extra en ${place.name}.`,
+      },
+    ]);
+    setPointComment("");
+  };
+
+  const publishDraftRoute = () => {
+    if (!draftTitle.trim() || draftPoints.length < 2) return;
+
+    const newRoute = {
+      source: "user",
+      author: "Tú",
+      avatar: "YO",
+      title: draftTitle.trim(),
+      rating: "4.8",
+      votes: 1,
+      comments: 0,
+      category: draftFilters === "playa" ? "🏖️ Playas & Caletas" : draftFilters === "cultura" ? "🏛️ Cultura & Miradores" : draftFilters === "marina" ? "⛵ Paseos en Lancha" : "🐟 Huariques & Cebiche",
+      duration: `${Math.max(1, draftPoints.length * 35 / 60).toFixed(1)}h`,
+      budget: `S/ ${(draftPoints.length * 12).toFixed(2)}`,
+      steps: draftPoints.map((step, index) => ({
+        icon: String(index + 1),
+        name: step.name,
+      })),
+      legs: draftPoints.slice(0, -1).map((step, index) => {
+        const next = draftPoints[index + 1];
+        return `Tramo ${index + 1}: ${step.name} → ${next.name}. ${step.comment || "Recorrido directo y cómodo para caminar."}`;
+      }),
+      comment: `${draftPoints[0].name} hasta ${draftPoints[draftPoints.length - 1].name}. Ruta publicada por la comunidad.`,
+      commenter: "Tú",
+    };
+
+    setCustomRoutes((current) => [newRoute, ...current]);
+    setSelectedRoute(newRoute);
+    setActiveMapLocation(null);
+    setIsCreating(false);
+    setDraftTitle("Ruta personalizada del cliente");
+    setDraftFilters("cultural");
+    setDraftPoints([
+      { name: "Plaza de Armas", latitude: -9.0759, longitude: -78.5936, comment: "Inicio del recorrido." },
+      { name: "Cine Bahía", latitude: -9.0737, longitude: -78.5857, comment: "Punto central del recorrido." },
+      { name: "Megaplaza", latitude: -9.0714, longitude: -78.5819, comment: "Último punto antes del cierre del circuito." },
+    ]);
+  };
+
+  const mapLocations = isCreating
+    ? draftPoints.map((point, index) => ({
+        name: point.name,
+        type: `Punto ${index + 1}`,
+        address: point.comment || "Parada del recorrido del usuario.",
+        latitude: point.latitude,
+        longitude: point.longitude,
+        icon: String(index + 1),
+      }))
+    : selectedRoute.steps.map((step, index) => ({
+        name: step.name,
+        type: `Parada ${index + 1}`,
+        address: `Tramo ${index + 1} de la ruta comunitaria`,
+        latitude: step.latitude,
+        longitude: step.longitude,
+        icon: step.icon,
+      }));
+
+  const selectedMapLocation = activeMapLocation ?? mapLocations[0];
+  const routeLine = mapLocations.map((point) => [point.latitude, point.longitude]).filter(Boolean);
 
   return (
     <div className="route-planner-page">
       <button className="route-back" onClick={onBack}>← Volver al lobby turístico</button>
+      <div className="route-role-switch">
+        <button className={userRole === "cliente" ? "active" : ""} onClick={() => setUserRole("cliente")}>Cliente</button>
+        <button className={userRole === "propietario" ? "active" : ""} onClick={() => setUserRole("propietario")}>Propietario</button>
+      </div>
       <div className="route-content-grid">
         <div className="route-left-column">
           <section className="route-explorer-panel">
-            <div className="route-explorer-title"><span>◉</span><h1>Explorar y Diseñar Rutas</h1><b>Chimbote Costero</b></div>
+            <div className="route-explorer-title"><span>◉</span><h1>Explorar y Diseñar Rutas</h1><b>{userRole === "cliente" ? "Vista cliente" : "Vista propietario"}</b></div>
             <input className="route-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="⌕  Busca una ruta, lugar o actividad" />
             <div className="route-category-list">
               {routeCategories.map((category) => <button className={activeCategory === category ? "selected" : ""} key={category} onClick={() => setActiveCategory(category)}>{category}</button>)}
             </div>
-            <button className="create-route-button" onClick={() => setIsCreating(!isCreating)}>⊕ <strong>{isCreating ? "Cerrar creador de rutas" : "Crear tu propia ruta"}</strong></button>
-            {isCreating && <div className="route-builder"><strong>Diseña tu ruta paso a paso</strong><p>Selecciona lugares del mapa, agrega tramos y publica tu recorrido para la comunidad.</p><button onClick={() => setIsCreating(false)}>Empezar con una ruta vacía</button></div>}
+            <button className="create-route-button" onClick={() => setIsCreating(!isCreating)}>⊕ <strong>{isCreating ? "Cerrar creador de rutas" : userRole === "cliente" ? "Crear tu propia ruta" : "Agregar mi local"}</strong></button>
+            {isCreating && (
+              <div className="route-builder">
+                <strong>{userRole === "cliente" ? "Diseña tu ruta paso a paso" : "Gestiona tu local en el mapa"}</strong>
+                {userRole === "cliente" ? (
+                  <>
+                    <div className="route-builder-form">
+                      <input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Título de tu ruta" />
+                      <select value={draftFilters} onChange={(event) => setDraftFilters(event.target.value)}>
+                        <option value="cultural">Cultural</option>
+                        <option value="playa">Playa</option>
+                        <option value="marina">Marina</option>
+                        <option value="gastronomia">Gastronomía</option>
+                      </select>
+                    </div>
+                    <div className="route-builder-form">
+                      <select value={selectedPoint} onChange={(event) => setSelectedPoint(event.target.value)}>
+                        {suggestedPlaces.map((place) => <option key={place.name} value={place.name}>{place.name}</option>)}
+                      </select>
+                      <input value={pointComment} onChange={(event) => setPointComment(event.target.value)} placeholder="Comentario del tramo" />
+                    </div>
+                    <div className="route-builder-actions">
+                      <button onClick={addDraftPoint}>Agregar punto</button>
+                      <button className="primary" onClick={publishDraftRoute}>Publicar ruta</button>
+                    </div>
+                    <div className="route-point-list">
+                      {draftPoints.map((point, index) => (
+                        <div key={`${point.name}-${index}`} className="route-point-item">
+                          <span>Punto {index + 1}</span>
+                          <strong>{point.name}</strong>
+                          <small>{point.comment}</small>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p>Como propietario puedes registrar tu local, cargar horarios, dirección y servicios del negocio.</p>
+                    <button onClick={() => setIsCreating(false)}>Ir a mi local</button>
+                  </>
+                )}
+              </div>
+            )}
             {routeError && <div className="route-builder"><strong>No se pudo generar tu ruta</strong><p>{routeError}</p></div>}
           </section>
           <section className="community-routes-section">
@@ -195,7 +325,12 @@ export default function PlanRuta({ onBack, rutaData, routeError }) {
         <aside className="route-map-panel">
           <div className="route-map-panel-header"><strong>Mapa de la ruta</strong><span>En vivo</span></div>
           <div className="route-map-panel-body">
-            <RealMap locations={routeMapLocations} activeLocation={selectedMapLocation} onSelectLocation={setActiveMapLocation} />
+            <RealMap
+              locations={mapLocations}
+              activeLocation={selectedMapLocation}
+              onSelectLocation={setActiveMapLocation}
+              routeLine={routeLine}
+            />
           </div>
           <p className="route-map-caption">Selecciona una ruta o una parada para actualizar el mapa.</p>
         </aside>
