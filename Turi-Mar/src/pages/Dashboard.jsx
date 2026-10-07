@@ -182,7 +182,7 @@ const locationsByGuide = {
       latitude: -9.1198125,
       longitude: -78.5225625,
       type: "Cebichería",
-      address: "Chimbote 02711",
+      address: "Nuevo Chimbote 02711",
       price: "Consultar precio",
       rating: "4.4",
       icon: "🐠",
