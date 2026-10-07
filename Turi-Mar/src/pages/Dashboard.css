@@ -824,7 +824,7 @@ footer{
 .account-form{display:grid;gap:9px;padding-top:22px}.account-form label{margin-top:8px;color:#334c64;font-size:12px;font-weight:800}.account-form input{width:100%;box-sizing:border-box;border:1px solid #d7e2eb;border-radius:9px;padding:12px;color:#16344f;font:inherit}.account-form input:focus{outline:3px solid #d9f2fc;border-color:#39a7d4}.account-form input[readonly]{background:#f5f8fa;color:#728197}.account-message{color:#087b61;font-size:12px}.account-actions{display:flex;justify-content:space-between;gap:10px;margin-top:15px}.account-actions button{border:0;border-radius:9px;padding:11px 16px;font-weight:800;cursor:pointer}.account-save{background:#087bb3;color:#fff}.account-save:disabled{opacity:.6;cursor:wait}.account-logout{background:#fbecee;color:#b33343}
 
 /* Mapa principal con proporción y márgenes de la vista de referencia */
-.radar-map{height:322px;margin:16px 18px;padding:0;border-radius:12px}
+.radar-map{height:380px;margin:16px 18px;padding:0;border-radius:12px}
 .radar-map .real-map-wrapper{position:absolute;inset:0;height:auto;min-height:0;border-radius:12px;overflow:hidden}
 .radar-map .real-map{height:100%;min-height:0}
 .fig-tabs{flex-wrap:wrap}
@@ -928,6 +928,8 @@ footer{
 .radar-local-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:#257b79;font-size:9px;font-weight:800}
 .radar-local-sidebar-heading button{width:26px;height:26px;border:0;background:#f1f5f5;color:#586f78;font-size:17px;cursor:pointer}
 .radar-local-sidebar h3{margin:9px 0 5px;color:#183b52;font-size:15px}
+.radar-local-owner{font-weight:700}
+.radar-local-owner.unavailable{color:#8b6b37}
 .radar-local-sidebar>p{margin:7px 0;color:#617985;font-size:10px;line-height:1.45}
 .radar-local-category{display:inline-block;padding:4px 6px;background:#edf5f3;color:#31726f;font-size:9px}
 .radar-local-menu{display:grid;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e1e9ec}
@@ -987,7 +989,7 @@ footer{
 .navigation-stop{align-self:flex-end;flex:0 0 auto}
 .navigation-error{position:absolute;left:14px;right:14px;bottom:58px;margin:0;padding:7px 9px;background:#fff2ef;color:#934b3e;font-size:10px}
 @media(max-width:620px){.navigation-detail{left:10px;right:10px;bottom:10px;width:auto;transform:none;gap:9px;padding:12px}.navigation-detail .detail-photo{width:38px;height:38px;font-size:20px}.navigation-summary ol{max-height:88px;overflow:auto}.navigation-stop{padding:8px 10px;font-size:10px}}
-@media(max-width:700px){.radar-map.radar-map-with-sidebar{height:auto;min-height:0;flex-direction:column}.radar-map-with-sidebar .radar-map-canvas{height:300px;flex:0 0 300px}.radar-local-sidebar{flex:0 0 auto;max-height:220px;border-left:0;border-top:1px solid #dce6eb}.route-create-map-status{top:auto;right:10px;bottom:10px;max-width:calc(100% - 20px)}}
+@media(max-width:700px){.radar-map.radar-map-with-sidebar{height:auto;min-height:0;flex-direction:column}.radar-map-with-sidebar .radar-map-canvas{height:340px;flex:0 0 340px}.radar-local-sidebar{flex:0 0 auto;max-height:240px;border-left:0;border-top:1px solid #dce6eb}.route-create-map-status{top:auto;right:10px;bottom:10px;max-width:calc(100% - 20px)}}
 .radar-local-count{align-self:center;padding:6px 8px;background:#eff7f5;color:#286b67;font-size:10px;font-weight:700}
 .community-local-icon{display:grid;width:100%;height:100%;place-items:center;background:#e2f1ed;color:#236c65;font-size:28px}
 .navigate-button:disabled{opacity:.55;cursor:not-allowed}

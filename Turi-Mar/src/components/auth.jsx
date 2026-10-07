@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 
 export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,7 +15,18 @@ export default function Auth() {
     setMessage(null);
 
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const name = fullName.trim().replace(/\s+/g, ' ');
+      if (!name) {
+        setMessage('Escribe tu nombre completo para registrarte.');
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name, nombre: name } },
+      });
       if (error) setMessage(error.message);
       else setMessage('¡Registro exitoso! Revisa tu correo o inicia sesión.');
     } else {
@@ -45,6 +57,24 @@ export default function Auth() {
 
         {/* Formulario */}
         <form onSubmit={handleAuth} className="space-y-5">
+          {isSignUp && (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                Nombre completo
+              </label>
+              <input
+                type="text"
+                required
+                minLength={2}
+                maxLength={100}
+                autoComplete="name"
+                placeholder="Tu nombre y apellido"
+                className="w-full px-4 py-3 bg-slate-950/60 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-white placeholder-slate-500 transition-all duration-300"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
               Correo Electrónico

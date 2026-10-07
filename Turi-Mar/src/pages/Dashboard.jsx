@@ -110,6 +110,7 @@ function toPublicLocation(local) {
     latitude: Number(local.latitud),
     longitude: Number(local.longitud),
     image_url: local.imagen_url ?? null,
+    ownerName: local.propietario_nombre ?? local.nombre_propietario ?? local.usuario?.nombre ?? local.owner?.nombre ?? "",
     price: "Consultar",
     rating: "Sin reseñas",
     icon: "⌂",
@@ -549,10 +550,13 @@ function Radar({ onAction, locations, localsLoadError }) {
         {selectedLocal && (
           <aside className="radar-local-sidebar">
             <div className="radar-local-sidebar-heading">
-              <span>LOCAL DE LA COMUNIDAD</span>
+              <span>LOCAL DEL PROPIETARIO</span>
               <button type="button" aria-label="Cerrar ficha del local" onClick={() => setSelectedLocal(null)}>×</button>
             </div>
             <h3>{selectedLocal.name}</h3>
+            <p className={`radar-local-owner ${selectedLocal.ownerName ? "" : "unavailable"}`}>
+              {selectedLocal.ownerName ? `Propietario: ${selectedLocal.ownerName}` : "Nombre del propietario no disponible"}
+            </p>
             <span className="radar-local-category">{selectedLocal.type}</span>
             <p>{selectedLocal.address}</p>
             {selectedLocal.descripcion && <p>{selectedLocal.descripcion}</p>}

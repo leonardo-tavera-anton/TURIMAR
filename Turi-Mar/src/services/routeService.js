@@ -56,7 +56,7 @@ export async function crearRutaComunidad(route, points) {
         nombre: point.name,
         latitud: point.latitude,
         longitud: point.longitude,
-        comentario: point.comment,
+        comentario_tramo: point.comment,
       }),
     });
   }

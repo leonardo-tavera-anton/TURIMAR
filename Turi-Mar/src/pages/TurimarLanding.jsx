@@ -5,6 +5,7 @@ import ChalanaAnimada from '../components/ChalanaAnimada';
 
 export default function TurimarLanding({ onLogin }) {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,6 +19,13 @@ export default function TurimarLanding({ onLogin }) {
     setMessage(null);
 
     if (isSignUp) {
+      const name = fullName.trim().replace(/\s+/g, ' ');
+      if (name.length < 2) {
+        setMessage('Escribe tu nombre completo para registrarte.');
+        setLoading(false);
+        return;
+      }
+
       const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 
       if (!passwordRegex.test(password)) {
@@ -26,7 +34,11 @@ export default function TurimarLanding({ onLogin }) {
         return;
       }
 
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name, nombre: name } },
+      });
       if (error) {
         setMessage(error.message);
       } else {
@@ -38,7 +50,7 @@ export default function TurimarLanding({ onLogin }) {
       if (error) {
         setMessage(error.message);
       } else {
-        setMessage('Correo o contraseña errones. Por favor, verifica tus credenciales.');
+        setMessage('Inicio de sesión exitoso.');
         onLogin();
       }
     }
@@ -98,6 +110,26 @@ export default function TurimarLanding({ onLogin }) {
           </p>
 
           <form onSubmit={handleAuth} className="space-y-4">
+            {isSignUp && (
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                  Nombre completo
+                </label>
+                <input
+                  type="text"
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  autoComplete="name"
+                  placeholder="Tu nombre y apellido"
+                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none text-slate-800"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  onFocus={() => setInputActivo('name')}
+                  onBlur={() => setInputActivo(null)}
+                />
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
                 Correo Electrónico
