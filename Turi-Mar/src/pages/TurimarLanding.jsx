@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { supabase } from '../supabaseClient';
 import PelicanoAnimado from '../components/PelicanoAnimado';
 import ChalanaAnimada from '../components/ChalanaAnimada';
+
+// URL de tu API backend en Render
+const API_URL = 'https://turimar-backend.onrender.com/api';
 
 export default function TurimarLanding({ onLogin }) {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -26,20 +28,46 @@ export default function TurimarLanding({ onLogin }) {
         return;
       }
 
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setMessage(error.message);
-      } else {
+      try {
+        const response = await fetch(`${API_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Error en el registro.');
+        }
+
         setMessage('¡Registro exitoso! Ya puedes iniciar sesión.');
         setIsSignUp(false);
+      } catch (error) {
+        setMessage(error.message);
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setMessage(error.message);
-      } else {
-        setMessage('Correo o contraseña errones. Por favor, verifica tus credenciales.');
+      try {
+        const response = await fetch(`${API_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Correo o contraseña erróneos. Por favor, verifica tus credenciales.');
+        }
+
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user || { email }));
+        }
+
         onLogin();
+      } catch (error) {
+        setMessage(error.message);
       }
     }
     setLoading(false);
@@ -48,7 +76,6 @@ export default function TurimarLanding({ onLogin }) {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-900 text-white">
       {/* Lado izquierdo: Información y diseño */}
-      
       <div className="md:w-7/12 p-8 md:p-16 flex flex-col justify-between bg-gradient-to-br from-blue-900 via-slate-900 to-slate-950">
         <div>
           <div className="flex items-center space-x-2 mb-12">
@@ -66,7 +93,6 @@ export default function TurimarLanding({ onLogin }) {
           </p>
 
           <div className="-mx-4 sm:mx-0">
-            {/* 2. AÑADIDO: Le pasamos el estado actual a la chalana */}
             <ChalanaAnimada inputActivo={inputActivo} />
           </div>
         </div>
@@ -87,7 +113,7 @@ export default function TurimarLanding({ onLogin }) {
         </div>
       </div>
 
-      {/* Lado derecho: Formulario funcional de Autenticación integrado */}
+      {/* Lado derecho: Formulario de Autenticación */}
       <div className="md:w-5/12 bg-white text-slate-800 p-8 md:p-12 flex flex-col justify-center">
         <div className="max-w-md w-full mx-auto">
           <h2 className="text-2xl font-bold text-slate-900 mb-2">
@@ -109,7 +135,6 @@ export default function TurimarLanding({ onLogin }) {
                 className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none text-slate-800"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                // 3. AÑADIDO: Eventos focus y blur para el correo
                 onFocus={() => setInputActivo('email')}
                 onBlur={() => setInputActivo(null)}
               />
@@ -126,7 +151,6 @@ export default function TurimarLanding({ onLogin }) {
                 className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none text-slate-800"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                // 4. AÑADIDO: Eventos focus y blur para la contraseña
                 onFocus={() => setInputActivo('password')}
                 onBlur={() => setInputActivo(null)}
               />

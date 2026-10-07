@@ -2,7 +2,6 @@
 import Dashboard from './pages/Dashboard'
 import PersonalizaExperiencia from './pages/PersonalizaExperiencia'
 import TurimarLanding from './pages/TurimarLanding'
-import { supabase } from './supabaseClient'
 import { generarRutaIA } from './services/routeService'
 
 type ScreenState = 'landing' | 'personalize' | 'dashboard'
@@ -24,31 +23,35 @@ function App() {
   const [routeError, setRouteError] = useState('')
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
+    // Comprobar la sesión almacenada desde el backend en Render
+    const token = localStorage.getItem('token')
+    const storedUser = localStorage.getItem('user')
+
+    if (token && storedUser) {
+      try {
+        const user = JSON.parse(storedUser)
         const hasPersonalized = localStorage.getItem(`has_personalized_${user.id}`)
         setScreen(hasPersonalized ? 'dashboard' : 'personalize')
-      }
-      setLoading(false)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const hasPersonalized = localStorage.getItem(`has_personalized_${session.user.id}`)
-        setScreen(hasPersonalized ? 'dashboard' : 'personalize')
-      } else if (event === 'SIGNED_OUT') {
+      } catch {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
         setScreen('landing')
       }
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
+    } else {
+      setScreen('landing')
+    }
+    setLoading(false)
   }, [])
 
   const completePersonalization = async (preferences = {}) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      localStorage.setItem(`has_personalized_${user.id}`, 'true')
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser)
+        localStorage.setItem(`has_personalized_${user.id}`, 'true')
+      } catch (e) {
+        console.error('Error al parsear el usuario local:', e)
+      }
     }
 
     setGeneratingRoute(true)
@@ -66,15 +69,21 @@ function App() {
     setScreen('dashboard')
   }
 
-  const handleLogin = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const hasPersonalized = localStorage.getItem(`has_personalized_${user.id}`)
-    setScreen(hasPersonalized ? 'dashboard' : 'personalize')
+  const handleLogin = () => {
+    const storedUser = localStorage.getItem('user')
+    if (!storedUser) return
+    try {
+      const user = JSON.parse(storedUser)
+      const hasPersonalized = localStorage.getItem(`has_personalized_${user.id}`)
+      setScreen(hasPersonalized ? 'dashboard' : 'personalize')
+    } catch {
+      setScreen('landing')
+    }
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
     setScreen('landing')
   }
 
@@ -99,10 +108,12 @@ function App() {
   }
 
   if (screen === 'personalize') {
-    return <PersonalizaExperiencia
-      onContinue={completePersonalization}
-      onSkip={() => completePersonalization({})}
-    />
+    return (
+      <PersonalizaExperiencia
+        onContinue={completePersonalization}
+        onSkip={() => completePersonalization({})}
+      />
+    )
   }
 
   if (screen === 'dashboard') {
