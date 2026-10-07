@@ -4,6 +4,7 @@ import RealMap from "../components/dashboard/RealMap";
 import { createLocal, createLocalDish, deleteLocal, getLocalMenu, getOwnerLocals, updateLocal } from "../services/localService";
 import { reverseGeocode } from "../services/placeLookup";
 import { getCachedUserRoutes, getRoutePoints, getUserRoutes } from "../services/routeService";
+import { getDrivingRoute } from "../services/directionsService";
 
 const clientTabs = [
   { id: "my-routes", icon: "⌁", label: "Mis rutas" },
@@ -18,7 +19,8 @@ const ownerTabs = [
 
 // Perfil con rutas, locales del propietario y configuración de la cuenta.
 export default function PerfilCuenta({ profile, onBack }) {
-  const name = profile?.user_metadata?.full_name || profile?.email?.split("@")[0] || "Usuario Turi-Mar";
+  const [displayName, setDisplayName] = useState(profile?.user_metadata?.full_name || profile?.email?.split("@")[0] || "Usuario Turi-Mar");
+  const name = displayName;
   const initials = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   const [role, setRole] = useState("propietario");
   const tabs = role === "propietario" ? ownerTabs : clientTabs;
@@ -50,6 +52,14 @@ export default function PerfilCuenta({ profile, onBack }) {
   const [routes, setRoutes] = useState([]);
   const [routesLoading, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState("");
+  const [followingRoute, setFollowingRoute] = useState(null);
+  const [followLoadingId, setFollowLoadingId] = useState(null);
+  const [followError, setFollowError] = useState("");
+  const [accountForm, setAccountForm] = useState({
+    nombre: profile?.user_metadata?.full_name ?? profile?.email?.split("@")[0] ?? "",
+    email: profile?.email ?? "",
+    password: "",
+  });
   const [settings, setSettings] = useState(() => ({
     push: true,
     gps: true,
@@ -162,6 +172,96 @@ export default function PerfilCuenta({ profile, onBack }) {
       setSaving(false);
     }
   };
+  const saveAccount = async (event) => {
+    event.preventDefault();
+    const cleanName = accountForm.nombre.trim().replace(/\s+/g, " ");
+    if (cleanName.length < 2) {
+      setMessage("Escribe tu nombre completo.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    try {
+      const attributes = { data: { full_name: cleanName, nombre: cleanName } };
+      const cleanEmail = accountForm.email.trim();
+      if (cleanEmail && cleanEmail !== profile?.email) attributes.email = cleanEmail;
+      if (accountForm.password) attributes.password = accountForm.password;
+
+      const { error } = await supabase.auth.updateUser(attributes);
+      if (error) throw error;
+
+      setDisplayName(cleanName);
+      setAccountForm((current) => ({ ...current, nombre: cleanName, password: "" }));
+      const { error: profileError } = await supabase
+        .from("usuarios")
+        .update({ nombre: cleanName, email: cleanEmail || profile?.email })
+        .eq("id", profile.id);
+
+      setMessage(profileError
+        ? `Nombre y acceso de Supabase actualizados. La tabla usuarios rechazó sincronizar los datos: ${profileError.message}`
+        : attributes.email && attributes.email !== profile?.email
+          ? "Cambios guardados. Confirma el correo nuevo desde tu bandeja de entrada."
+          : "Datos de cuenta actualizados.");
+    } catch (error) {
+      setMessage(`No se pudo actualizar la cuenta: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const followSavedRoute = async (route) => {
+    const routeId = route.id ?? route.ruta_id;
+    const savedStops = (route.puntos ?? route.points ?? []).map((point) => ({
+      name: point.nombre ?? point.name ?? "Parada",
+      latitude: Number(point.latitud ?? point.latitude),
+      longitude: Number(point.longitud ?? point.longitude),
+    }));
+    if (savedStops.length < 2 || savedStops.some((point) => !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude))) {
+      setFollowError("Esta ruta no tiene al menos dos paradas con coordenadas válidas.");
+      return;
+    }
+    if (!navigator.geolocation) {
+      setFollowError("Este navegador no permite obtener tu ubicación.");
+      return;
+    }
+
+    setFollowLoadingId(routeId);
+    setFollowError("");
+    setFollowingRoute(null);
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 30000,
+        });
+      });
+      const origin = { name: "Tu ubicación", latitude: position.coords.latitude, longitude: position.coords.longitude };
+      const stops = [origin, ...savedStops];
+      const segments = [];
+      for (let index = 0; index < stops.length - 1; index += 1) {
+        segments.push(await getDrivingRoute(stops[index], stops[index + 1]));
+      }
+
+      const coordinates = segments.flatMap((segment, index) => (
+        index === 0 ? segment.coordinates : segment.coordinates.slice(1)
+      ));
+      setFollowingRoute({
+        id: routeId,
+        title: route.titulo ?? route.titulo_ruta ?? route.nombre ?? "Ruta guardada",
+        stops,
+        coordinates,
+        distanceMeters: segments.reduce((total, segment) => total + segment.distanceMeters, 0),
+        durationSeconds: segments.reduce((total, segment) => total + segment.durationSeconds, 0),
+      });
+    } catch (error) {
+      if (error?.code === 1) setFollowError("Permite el acceso a tu ubicación para seguir esta ruta.");
+      else if (error?.code === 2 || error?.code === 3) setFollowError("No se pudo obtener tu ubicación. Inténtalo nuevamente.");
+      else setFollowError(error instanceof Error ? error.message : "No se pudo calcular el recorrido por calles.");
+    } finally {
+      setFollowLoadingId(null);
+    }
+  };
   const reloadLocals = async () => {
     const data = await getOwnerLocals(profile.id);
     setLocals(Array.isArray(data) ? data : data?.locales ?? data?.data ?? []);
@@ -246,7 +346,7 @@ export default function PerfilCuenta({ profile, onBack }) {
     setDeletingLocalId(local.id);
     setMessage("");
     try {
-      await deleteLocal(local.id);
+      await deleteLocal(local.id, profile.id);
       await reloadLocals();
       setMessage("Local eliminado.");
     } catch (error) {
@@ -441,6 +541,35 @@ export default function PerfilCuenta({ profile, onBack }) {
                       <span>{points.length} paradas</span>
                     </div>
                     {points.length > 0 && <ol>{points.map((point, index) => <li key={point.id ?? `${point.nombre}-${index}`}>{point.nombre ?? point.name ?? `Parada ${index + 1}`}</li>)}</ol>}
+                    <div className="fig-user-route-actions">
+                      <button className="fig-primary" onClick={() => followSavedRoute(route)} disabled={followLoadingId === routeId}>
+                        {followLoadingId === routeId ? "Calculando desde tu ubicación…" : "⌖ Seguir ruta"}
+                      </button>
+                    </div>
+                    {followError && <p className="fig-feedback fig-feedback-error" role="alert">{followError}</p>}
+                    {followingRoute && String(followingRoute.id) === String(routeId) && (
+                      <div className="fig-follow-route">
+                        <div className="fig-follow-route-map">
+                          <RealMap
+                            locations={followingRoute.stops.map((stop, index) => ({
+                              ...stop,
+                              address: index === 0 ? "Punto de partida" : `Parada ${index}`,
+                              kind: index === 0 ? "start" : "destination",
+                            }))}
+                            routeLine={followingRoute.coordinates}
+                            fitLocations
+                            showToolbar={false}
+                            showUserMarker={false}
+                            requestUserLocation={false}
+                          />
+                        </div>
+                        <div className="fig-follow-route-summary">
+                          <strong>{(followingRoute.distanceMeters / 1000).toFixed(1)} km</strong>
+                          <strong>{Math.max(1, Math.round(followingRoute.durationSeconds / 60))} min aprox.</strong>
+                          <button className="fig-secondary" onClick={() => setFollowingRoute(null)}>Cerrar recorrido</button>
+                        </div>
+                      </div>
+                    )}
                   </article>
                 );
               })}
@@ -597,12 +726,30 @@ export default function PerfilCuenta({ profile, onBack }) {
         )}
 
         {tab === "settings" ? (
-          <Settings
-            settings={settings}
-            setSettings={setSettings}
-            save={() => persist({ turimar_settings: settings }, "Configuración guardada.")}
-            saving={saving}
-          />
+          <div className="fig-account-settings">
+            <Settings
+              settings={settings}
+              setSettings={setSettings}
+              save={() => persist({ turimar_settings: settings }, "Configuración guardada.")}
+              saving={saving}
+            />
+            <form className="fig-box fig-account-form" onSubmit={saveAccount}>
+              <h2>Datos de cuenta</h2>
+              <label>
+                Nombre completo
+                <input required minLength={2} maxLength={100} autoComplete="name" value={accountForm.nombre} onChange={(event) => setAccountForm((current) => ({ ...current, nombre: event.target.value }))} />
+              </label>
+              <label>
+                Correo electrónico
+                <input required type="email" autoComplete="email" value={accountForm.email} onChange={(event) => setAccountForm((current) => ({ ...current, email: event.target.value }))} />
+              </label>
+              <label>
+                Nueva contraseña <small>(déjala vacía para no cambiarla)</small>
+                <input type="password" minLength={8} autoComplete="new-password" value={accountForm.password} onChange={(event) => setAccountForm((current) => ({ ...current, password: event.target.value }))} placeholder="Mínimo 8 caracteres" />
+              </label>
+              <button className="fig-primary" disabled={saving}>{saving ? "Guardando…" : "Guardar datos de cuenta"}</button>
+            </form>
+          </div>
         ) : null}
       </div>
     </main>

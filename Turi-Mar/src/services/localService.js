@@ -1,3 +1,5 @@
+import { supabase } from "../supabaseClient";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "https://turimar-backend.onrender.com";
 
 async function request(path, options = {}) {
@@ -21,7 +23,9 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const message = typeof data === "string" ? data : data?.message ?? data?.error;
-    throw new Error(message || `Error ${response.status} al comunicarse con el backend`);
+    const error = new Error(message || `Error ${response.status} al comunicarse con el backend`);
+    error.status = response.status;
+    throw error;
   }
 
   return data;
@@ -50,12 +54,36 @@ export function updateLocal(localId, local) {
   return request(`/api/v1/locales/${encodeURIComponent(localId)}`, {
     method: "PUT",
     body: JSON.stringify(local),
+  }).catch(async (error) => {
+    if (error.status !== 404) throw error;
+    const { data, error: updateError } = await supabase
+      .from("locales")
+      .update(local)
+      .eq("id", localId)
+      .eq("usuario_id", local.usuario_id)
+      .select()
+      .maybeSingle();
+    if (updateError) throw new Error(`Render no tiene habilitada la edición y Supabase rechazó el cambio: ${updateError.message}`);
+    if (!data) throw new Error("No se encontró el local para esta cuenta o no tienes permiso para editarlo.");
+    return data;
   });
 }
 
-export function deleteLocal(localId) {
+export function deleteLocal(localId, userId) {
   return request(`/api/v1/locales/${encodeURIComponent(localId)}`, {
     method: "DELETE",
+  }).catch(async (error) => {
+    if (error.status !== 404) throw error;
+    const { data, error: deleteError } = await supabase
+      .from("locales")
+      .delete()
+      .eq("id", localId)
+      .eq("usuario_id", userId)
+      .select("id")
+      .maybeSingle();
+    if (deleteError) throw new Error(`Render no tiene habilitado el borrado y Supabase rechazó el cambio: ${deleteError.message}`);
+    if (!data) throw new Error("No se encontró el local para esta cuenta o no tienes permiso para eliminarlo.");
+    return data;
   });
 }
 
