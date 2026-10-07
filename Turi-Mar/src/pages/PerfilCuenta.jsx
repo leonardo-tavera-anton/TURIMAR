@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import RealMap from "../components/dashboard/RealMap";
-import { createLocal, getOwnerLocals, updateLocal } from "../services/localService";
+import { createLocal, deleteLocal, getOwnerLocals, updateLocal } from "../services/localService";
 
 // Navegación principal del perfil: actividad, guardados, preferencias y ajustes.
 const clientTabs = [
@@ -14,8 +14,6 @@ const ownerTabs = [
   { id: "business", icon: "⌂", label: "Resumen" },
   { id: "my-locals", icon: "🏪", label: "Mis locales" },
   { id: "add-local", icon: "+", label: "Agregar local" },
-  { id: "services", icon: "🧾", label: "Servicios" },
-  { id: "analytics", icon: "📊", label: "Estadísticas" },
   { id: "settings", icon: "⚙", label: "Configuración" },
 ];
 // Valores de ejemplo del diseño; las preferencias elegidas sí se guardan en Supabase.
@@ -47,7 +45,7 @@ function readPrefs(profile) {
 
 // Contenedor principal: el encabezado y la biografía se comparten entre las pestañas.
 export default function PerfilCuenta({ profile, onBack }) {
-  const name = profile?.user_metadata?.full_name || "Jorge Ramírez";
+  const name = profile?.user_metadata?.full_name || profile?.email?.split("@")[0] || "Usuario Turi-Mar";
   const initials = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   const [role, setRole] = useState("propietario");
   const tabs = role === "propietario" ? ownerTabs : clientTabs;
@@ -66,21 +64,8 @@ export default function PerfilCuenta({ profile, onBack }) {
   const [localsLoading, setLocalsLoading] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
   const [editingLocalId, setEditingLocalId] = useState(null);
-  const [serviceForm, setServiceForm] = useState({
-    nombre: "",
-    categoria: "gastronomia",
-    precio: "",
-    descripcion: "",
-  });
-  const [showServiceForm, setShowServiceForm] = useState(false);
-  const [services, setServices] = useState([
-    { nombre: "Ceviche mixto", precio: "S/ 35.00", categoria: "gastronomía" },
-    { nombre: "Tours a la bahía", precio: "S/ 60.00", categoria: "turismo" },
-    { nombre: "Alquiler de toldo", precio: "S/ 50.00", categoria: "servicio" },
-  ]);
-  const initialBio =
-    profile?.user_metadata?.turimar_bio ||
-    "Amante de la gastronomía costeña y los atardeceres en la Bahía El Ferrol. Siempre buscando el mejor ceviche.";
+  const [deletingLocalId, setDeletingLocalId] = useState(null);
+  const initialBio = profile?.user_metadata?.turimar_bio || "";
   const [bio, setBio] = useState(initialBio);
   const [editingBio, setEditingBio] = useState(false);
   const [prefs, setPrefs] = useState(() => readPrefs(profile));
@@ -93,7 +78,7 @@ export default function PerfilCuenta({ profile, onBack }) {
   const [newList, setNewList] = useState("");
   const [lists, setLists] = useState([]);
   useEffect(() => {
-    if (role !== "propietario" || tab !== "my-locals" || !profile?.id) return;
+    if (role !== "propietario" || !profile?.id) return;
 
     let active = true;
     setLocalsLoading(true);
@@ -116,9 +101,9 @@ export default function PerfilCuenta({ profile, onBack }) {
       });
 
     return () => { active = false; };
-  }, [role, tab, profile?.id]);
+  }, [role, profile?.id]);
   const memberSince = useMemo(() => {
-    if (!profile?.created_at) return "Marzo 2024";
+    if (!profile?.created_at) return "Sin fecha registrada";
 
     return new Date(profile.created_at).toLocaleDateString("es-PE", {
       month: "long",
@@ -135,6 +120,10 @@ export default function PerfilCuenta({ profile, onBack }) {
   const saveBio = async () => {
     await persist({ turimar_bio: bio }, "Tu descripción se guardó.");
     setEditingBio(false);
+  };
+  const reloadLocals = async () => {
+    const data = await getOwnerLocals(profile.id);
+    setLocals(Array.isArray(data) ? data : data?.locales ?? data?.data ?? []);
   };
   const toggleFood = (food) => {
     setPrefs((current) => ({
@@ -198,9 +187,15 @@ export default function PerfilCuenta({ profile, onBack }) {
     try {
       if (editingLocalId) await updateLocal(editingLocalId, payload);
       else await createLocal(payload);
-      setMessage(editingLocalId ? "Local actualizado." : "Local publicado correctamente.");
+      const successMessage = editingLocalId ? "Local actualizado." : "Local publicado correctamente.";
       resetLocalForm();
       setTab("my-locals");
+      setMessage(successMessage);
+      try {
+        await reloadLocals();
+      } catch {
+        setMessage(`${successMessage} No se pudo actualizar la lista; vuelve a abrir Mis locales.`);
+      }
     } catch (error) {
       setMessage(`No se pudo guardar el local: ${error.message}`);
     } finally {
@@ -224,6 +219,21 @@ export default function PerfilCuenta({ profile, onBack }) {
     setTab("add-local");
   };
 
+  const removeLocal = async (local) => {
+    if (!window.confirm(`¿Eliminar ${local.nombre ?? "este local"}? Esta acción no se puede deshacer.`)) return;
+    setDeletingLocalId(local.id);
+    setMessage("");
+    try {
+      await deleteLocal(local.id);
+      await reloadLocals();
+      setMessage("Local eliminado.");
+    } catch (error) {
+      setMessage(`No se pudo eliminar el local: ${error.message}`);
+    } finally {
+      setDeletingLocalId(null);
+    }
+  };
+
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
       setMessage("Este navegador no permite obtener la ubicación.");
@@ -234,22 +244,6 @@ export default function PerfilCuenta({ profile, onBack }) {
       () => setMessage("No se pudo obtener tu ubicación. Revisa el permiso de GPS."),
       { enableHighAccuracy: true, timeout: 12000 },
     );
-  };
-
-  const addService = () => {
-    const cleanName = serviceForm.nombre.trim();
-    if (!cleanName || !serviceForm.precio.trim()) return;
-
-    setServices((current) => [
-      {
-        nombre: cleanName,
-        precio: `S/ ${Number(serviceForm.precio).toFixed(2)}`,
-        categoria: serviceForm.categoria,
-      },
-      ...current,
-    ]);
-    setServiceForm({ nombre: "", categoria: "gastronomia", precio: "", descripcion: "" });
-    setShowServiceForm(false);
   };
 
   return (
@@ -276,27 +270,22 @@ export default function PerfilCuenta({ profile, onBack }) {
               <b>✓</b>
             </div>
             <div className="fig-identity-copy">
-              <h1>{name} <small>✓ Verificado</small></h1>
-              <a>
-                @{(profile?.email?.split("@")[0] || "jorgeramirez").toLowerCase()}
-              </a>
+              <h1>{name}</h1>
+              {profile?.email && <a>@{profile.email.split("@")[0].toLowerCase()}</a>}
               <p>
-                📍 Chimbote, Áncash · Miembro desde {memberSince} ·
+                Miembro desde {memberSince} ·
                 <em>{role === "propietario" ? "Dueño de Local" : "Turista Explorador"}</em>
               </p>
             </div>
             <button className="fig-edit-profile" onClick={() => setEditingBio(true)}>
-              ♢ Editar perfil
+              {bio ? "Editar perfil" : "Añadir descripción"}
             </button>
           </div>
 
-          <div className="fig-stats">
+          <div className={`fig-stats ${role === "propietario" ? "owner-stats" : ""}`}>
             {role === "propietario"
               ? [
-                  ["🏪", "3", "Locales activos"],
-                  ["⭐", "48", "Reseñas recibidas"],
-                  ["📦", "12", "Servicios publicados"],
-                  ["💬", "9", "Mensajes"],
+                  ["🏪", localsLoading ? "…" : String(locals.length), "Locales publicados"],
                 ]
               : [
                   ["🗺️", "24", "Lugares visitados"],
@@ -316,11 +305,13 @@ export default function PerfilCuenta({ profile, onBack }) {
       </section>
 
       <div className="fig-profile-content">
-        <section className="fig-bio">
-          <span>🗨️</span>
-          <p>{bio}</p>
-          <button onClick={() => setEditingBio(true)}>Editar</button>
-        </section>
+        {bio && !editingBio && (
+          <section className="fig-bio">
+            <span>🗨️</span>
+            <p>{bio}</p>
+            <button onClick={() => setEditingBio(true)}>Editar</button>
+          </section>
+        )}
 
         <nav className="fig-tabs" aria-label="Secciones del perfil">
           {tabs.map((item) => (
@@ -389,7 +380,12 @@ export default function PerfilCuenta({ profile, onBack }) {
                       <small>{local.categoria ?? "Local"} · {local.direccion ?? "Sin dirección"}</small>
                       <small>{local.latitud ?? local.latitude}, {local.longitud ?? local.longitude}</small>
                     </div>
-                    <button className="fig-secondary" onClick={() => editLocal(local)}>Editar</button>
+                    <div className="fig-local-actions">
+                      <button className="fig-secondary" onClick={() => editLocal(local)}>Editar</button>
+                      <button className="fig-danger" onClick={() => removeLocal(local)} disabled={deletingLocalId === local.id}>
+                        {deletingLocalId === local.id ? "Eliminando…" : "Eliminar"}
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -469,74 +465,6 @@ export default function PerfilCuenta({ profile, onBack }) {
                 <button className="fig-secondary" onClick={() => { resetLocalForm(); setTab("my-locals"); }}>Cancelar</button>
                 <button className="fig-primary" onClick={saveLocal} disabled={localSaving}>{localSaving ? "Guardando…" : editingLocalId ? "Guardar cambios" : "Publicar local"}</button>
               </div>
-          </section>
-        )}
-
-        {role === "propietario" && tab === "services" && (
-          <section className="fig-owner-services fig-box">
-            <h2>Servicios del local</h2>
-            <div className="fig-service-list">
-              {services.map((service, index) => (
-                <div key={`${service.nombre}-${index}`} className="fig-service-item">
-                  <div>
-                    <strong>{service.nombre}</strong>
-                    <small>{service.categoria}</small>
-                  </div>
-                  <b>{service.precio}</b>
-                </div>
-              ))}
-            </div>
-
-            {showServiceForm ? (
-              <div className="fig-service-form">
-                <input
-                  value={serviceForm.nombre}
-                  onChange={(event) => setServiceForm((current) => ({ ...current, nombre: event.target.value }))}
-                  placeholder="Nombre del servicio"
-                />
-                <select
-                  value={serviceForm.categoria}
-                  onChange={(event) => setServiceForm((current) => ({ ...current, categoria: event.target.value }))}
-                >
-                  <option value="gastronomia">Gastronomía</option>
-                  <option value="turismo">Turismo</option>
-                  <option value="servicio">Servicio</option>
-                  <option value="hotel">Hotel</option>
-                </select>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={serviceForm.precio}
-                  onChange={(event) => setServiceForm((current) => ({ ...current, precio: event.target.value }))}
-                  placeholder="Precio"
-                />
-                <textarea
-                  value={serviceForm.descripcion}
-                  rows={2}
-                  onChange={(event) => setServiceForm((current) => ({ ...current, descripcion: event.target.value }))}
-                  placeholder="Descripción del servicio"
-                />
-                <div className="fig-service-form-actions">
-                  <button className="fig-secondary" onClick={() => setShowServiceForm(false)}>Cancelar</button>
-                  <button className="fig-primary" onClick={addService}>Guardar servicio</button>
-                </div>
-              </div>
-            ) : (
-              <button className="fig-add-service" onClick={() => setShowServiceForm(true)}>＋ Agregar servicio</button>
-            )}
-          </section>
-        )}
-
-        {role === "propietario" && tab === "analytics" && (
-          <section className="fig-owner-analytics fig-box">
-            <h2>Estadísticas del negocio</h2>
-            <div className="fig-analytics-grid">
-              <div><strong>248</strong><span>Visitantes</span></div>
-              <div><strong>4.8</strong><span>Calificación</span></div>
-              <div><strong>18</strong><span>Reservas</span></div>
-              <div><strong>94%</strong><span>Retención</span></div>
-            </div>
           </section>
         )}
 

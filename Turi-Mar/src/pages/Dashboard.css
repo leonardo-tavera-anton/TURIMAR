@@ -843,6 +843,10 @@ footer{
 .fig-local-item strong{color:#123b59;font-size:12px}
 .fig-local-item small{color:#71869a;overflow-wrap:anywhere}
 .fig-local-item button{flex:0 0 auto}
+.fig-stats.owner-stats{grid-template-columns:minmax(0,180px)}
+.fig-local-actions{display:flex;gap:7px;flex:0 0 auto}
+.fig-danger{border:1px solid #ead2ce;background:#fff7f5;color:#a64437}
+.fig-local-actions button:disabled{opacity:.6;cursor:wait}
 @media(max-width:520px){.fig-local-map{height:280px}.fig-local-map-heading{align-items:flex-start;flex-direction:column}.fig-local-item{align-items:flex-start}.fig-owner-actions{flex-wrap:wrap}.fig-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.fig-tabs button{min-width:0}}
 .route-planner-page{background:#f4f6f8;color:#183247}
 .route-explorer-panel,.community-route-card,.route-map-panel{border:1px solid #dce3e8;border-radius:6px;box-shadow:none}
@@ -872,6 +876,10 @@ footer{
 .route-create-form>label,.route-create-stop-editor>label{display:grid;gap:6px;color:#365767;font-size:11px;font-weight:700}
 .route-create-form input,.route-create-form select{width:100%;min-height:40px;padding:9px 10px;border:1px solid #d7e0e3;border-radius:4px;background:#fff;color:#183247;font:inherit;font-weight:400}
 .route-create-form input:focus,.route-create-form select:focus{outline:2px solid #9cc9c7;outline-offset:1px}
+.route-title-control{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
+.route-title-control>button{min-width:76px;border:1px solid #d7e0e3;border-radius:4px;background:#f4f7f7;color:#245d66;font-size:11px;font-weight:700;cursor:pointer}
+.route-title-control>button:disabled{color:#a4b0b4;cursor:not-allowed}
+.route-title-control input:disabled{background:#f1f4f4;color:#42616b;font-weight:700}
 .route-create-stop-editor{display:grid;gap:10px;padding-top:13px;border-top:1px solid #e3e8ea}
 .route-create-stop-editor>p{margin:0;color:#71838c;font-size:11px}
 .route-create-section-title{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#234a5c;font-size:12px}

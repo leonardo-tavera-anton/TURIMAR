@@ -8,10 +8,19 @@ const categories = [
   ["playa", "Playas y caletas"],
   ["marina", "Paseos en lancha"],
   ["gastronomia", "Gastronomía"],
+  ["naturaleza", "Naturaleza y ecoturismo"],
+  ["aventura", "Aventura y deportes"],
+  ["historia", "Historia y arqueología"],
+  ["familiar", "Planes familiares"],
+  ["transporte", "Transporte y recorridos"],
+  ["compras", "Mercados y compras"],
+  ["eventos", "Eventos y festivales"],
+  ["vida_nocturna", "Vida nocturna"],
 ];
 
 export default function RouteCreator({ onBack, routeError }) {
   const [title, setTitle] = useState("");
+  const [titleLocked, setTitleLocked] = useState(false);
   const [category, setCategory] = useState("cultural");
   const [stopName, setStopName] = useState("");
   const [stopNote, setStopNote] = useState("");
@@ -75,8 +84,8 @@ export default function RouteCreator({ onBack, routeError }) {
   };
 
   const publishRoute = async () => {
-    if (!title.trim()) {
-      setFeedback("Escribe el nombre de la ruta.");
+    if (!title.trim() || !titleLocked) {
+      setFeedback(title.trim() ? "Fija el nombre antes de publicar." : "Escribe el nombre de la ruta.");
       return;
     }
     if (points.length < 2) {
@@ -93,7 +102,7 @@ export default function RouteCreator({ onBack, routeError }) {
 
       await crearRutaComunidad({
         usuario_id: user.id,
-        titulo_ruta: title.trim(),
+        titulo: title.trim(),
         descripcion: points.map((point) => point.comment).filter(Boolean).join(" "),
         categoria: category,
         duracion_total_horas: Math.max(1, Number((points.length * 35 / 60).toFixed(2))),
@@ -101,6 +110,7 @@ export default function RouteCreator({ onBack, routeError }) {
       }, points);
 
       setTitle("");
+      setTitleLocked(false);
       setCategory("cultural");
       setPoints([]);
       setFeedback("Ruta publicada correctamente.");
@@ -144,9 +154,22 @@ export default function RouteCreator({ onBack, routeError }) {
         </section>
 
         <section className="route-create-form" aria-label="Datos de la ruta">
-          <label>
+          <label className="route-title-field">
             Nombre de la ruta
-            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ej. Tarde junto a la bahía" maxLength={100} />
+            <div className="route-title-control">
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Ej. Tarde junto a la bahía"
+                maxLength={100}
+                disabled={titleLocked}
+              />
+              {titleLocked ? (
+                <button type="button" onClick={() => setTitleLocked(false)}>Modificar</button>
+              ) : (
+                <button type="button" onClick={() => title.trim() && setTitleLocked(true)} disabled={!title.trim()}>Fijar</button>
+              )}
+            </div>
           </label>
           <label>
             Categoría
@@ -192,9 +215,10 @@ export default function RouteCreator({ onBack, routeError }) {
           </div>
 
           {(feedback || routeError) && <p className="route-create-feedback" role="status">{feedback || routeError}</p>}
-          <button type="button" className="route-publish" onClick={publishRoute} disabled={saving || points.length < 2}>
+          <button type="button" className="route-publish" onClick={publishRoute} disabled={saving || points.length < 2 || !titleLocked}>
             {saving ? "Publicando…" : "Publicar ruta"}
           </button>
+          {!titleLocked && <small className="route-create-hint">Fija el nombre de la ruta para continuar.</small>}
           {points.length < 2 && <small className="route-create-hint">Agrega dos paradas para habilitar la publicación.</small>}
         </section>
       </div>

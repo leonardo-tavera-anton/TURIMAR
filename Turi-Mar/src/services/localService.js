@@ -44,3 +44,9 @@ export function updateLocal(localId, local) {
     body: JSON.stringify(local),
   });
 }
+
+export function deleteLocal(localId) {
+  return request(`/api/v1/locales/${encodeURIComponent(localId)}`, {
+    method: "DELETE",
+  });
+}
