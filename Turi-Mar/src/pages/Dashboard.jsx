@@ -156,6 +156,9 @@ const locationsByGuide = {
     },
     {
       name: "Cevicheria El Picantito",
+      // Centro aproximado del Plus Code VFJG+4W en Nuevo Chimbote.
+      latitude: -9.1196875,
+      longitude: -78.5226875,
       type: "Cevichería",
       address: "Av. Brasil, Mz C prima, Lote 7, Nuevo Chimbote",
       price: "Consultar precio",
@@ -175,8 +178,11 @@ const locationsByGuide = {
     },
     {
       name: "Cevicheria El Pescadito",
+      // Centro aproximado del Plus Code VFJG+3X en Chimbote.
+      latitude: -9.1198125,
+      longitude: -78.5225625,
       type: "Cebichería",
-      address: "Urb. Santa Rosa G-26, Nuevo Chimbote",
+      address: "Chimbote 02711",
       price: "Consultar precio",
       rating: "4.4",
       icon: "🐠",
