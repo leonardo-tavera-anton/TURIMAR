@@ -1,3 +1,5 @@
+import { supabase } from "../supabaseClient";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "https://turimar-backend.onrender.com";
 const ROUTE_CACHE_PREFIX = "turimar_routes_";
 
@@ -100,6 +102,41 @@ export function cacheUserRoute(userId, route) {
   } catch {
     // Route publication remains successful even if browser storage is unavailable.
   }
+}
+
+export function removeCachedUserRoute(userId, routeId) {
+  try {
+    const routes = getCachedUserRoutes(userId).filter(
+      (route) => String(route.id ?? route.ruta_id) !== String(routeId),
+    );
+    localStorage.setItem(`${ROUTE_CACHE_PREFIX}${userId}`, JSON.stringify(routes));
+  } catch {
+    // The server/database operation remains authoritative if browser storage is unavailable.
+  }
+}
+
+export async function deleteUserRoute(routeId, userId) {
+  try {
+    await request(`/api/v1/rutas/${encodeURIComponent(routeId)}`, { method: "DELETE" });
+  } catch (error) {
+    if (error.status !== 404 && error.status !== 405) throw error;
+
+    const { error: routeError } = await supabase
+      .from("rutas")
+      .delete()
+      .eq("id", routeId)
+      .eq("usuario_id", userId);
+    if (routeError) {
+      throw new Error(`Render no tiene habilitado el borrado. Supabase rechazó eliminar la ruta: ${routeError.message}`);
+    }
+
+    const remainingRoutes = await getUserRoutes(userId);
+    if (remainingRoutes.some((route) => String(route.id ?? route.ruta_id) === String(routeId))) {
+      throw new Error("No se eliminó la ruta. Revisa la política RLS DELETE para permitir que cada usuario elimine sus propias rutas.");
+    }
+  }
+
+  removeCachedUserRoute(userId, routeId);
 }
 
 export async function getRoutePoints(routeId) {

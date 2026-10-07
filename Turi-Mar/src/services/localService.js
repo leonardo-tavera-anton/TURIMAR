@@ -60,12 +60,12 @@ export function updateLocal(localId, local) {
       .from("locales")
       .update(local)
       .eq("id", localId)
-      .eq("usuario_id", local.usuario_id)
-      .select()
-      .maybeSingle();
+      .eq("usuario_id", local.usuario_id);
     if (updateError) throw new Error(`Render no tiene habilitada la edición y Supabase rechazó el cambio: ${updateError.message}`);
-    if (!data) throw new Error("No se encontró el local para esta cuenta o no tienes permiso para editarlo.");
-    return data;
+    const ownedLocals = await getOwnerLocals(local.usuario_id);
+    const updatedLocal = (Array.isArray(ownedLocals) ? ownedLocals : []).find((item) => String(item.id) === String(localId));
+    if (!updatedLocal) throw new Error("Supabase no confirma la edición. Revisa la política RLS UPDATE para que el dueño modifique sus locales.");
+    return updatedLocal;
   });
 }
 
@@ -78,12 +78,12 @@ export function deleteLocal(localId, userId) {
       .from("locales")
       .delete()
       .eq("id", localId)
-      .eq("usuario_id", userId)
-      .select("id")
-      .maybeSingle();
+      .eq("usuario_id", userId);
     if (deleteError) throw new Error(`Render no tiene habilitado el borrado y Supabase rechazó el cambio: ${deleteError.message}`);
-    if (!data) throw new Error("No se encontró el local para esta cuenta o no tienes permiso para eliminarlo.");
-    return data;
+    const ownedLocals = await getOwnerLocals(userId);
+    const stillExists = (Array.isArray(ownedLocals) ? ownedLocals : []).some((item) => String(item.id) === String(localId));
+    if (stillExists) throw new Error("Supabase no confirmó el borrado. Revisa la política RLS DELETE para que el dueño elimine sus locales.");
+    return { id: localId };
   });
 }
 

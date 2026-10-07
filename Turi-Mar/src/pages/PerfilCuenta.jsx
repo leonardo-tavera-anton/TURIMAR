@@ -3,7 +3,7 @@ import { supabase } from "../supabaseClient";
 import RealMap from "../components/dashboard/RealMap";
 import { createLocal, createLocalDish, deleteLocal, getLocalMenu, getOwnerLocals, updateLocal } from "../services/localService";
 import { reverseGeocode } from "../services/placeLookup";
-import { getCachedUserRoutes, getRoutePoints, getUserRoutes } from "../services/routeService";
+import { deleteUserRoute, getCachedUserRoutes, getRoutePoints, getUserRoutes } from "../services/routeService";
 import { getDrivingRoute } from "../services/directionsService";
 
 const clientTabs = [
@@ -55,6 +55,7 @@ export default function PerfilCuenta({ profile, onBack }) {
   const [followingRoute, setFollowingRoute] = useState(null);
   const [followLoadingId, setFollowLoadingId] = useState(null);
   const [followError, setFollowError] = useState("");
+  const [deletingRouteId, setDeletingRouteId] = useState(null);
   const [accountForm, setAccountForm] = useState({
     nombre: profile?.user_metadata?.full_name ?? profile?.email?.split("@")[0] ?? "",
     email: profile?.email ?? "",
@@ -260,6 +261,21 @@ export default function PerfilCuenta({ profile, onBack }) {
       else setFollowError(error instanceof Error ? error.message : "No se pudo calcular el recorrido por calles.");
     } finally {
       setFollowLoadingId(null);
+    }
+  };
+  const removeRoute = async (route) => {
+    const routeId = route.id ?? route.ruta_id;
+    if (!window.confirm(`¿Eliminar la ruta “${route.titulo ?? route.titulo_ruta ?? "Ruta guardada"}” y sus paradas?`)) return;
+    setDeletingRouteId(routeId);
+    setRoutesError("");
+    try {
+      await deleteUserRoute(routeId, profile.id);
+      setRoutes((current) => current.filter((item) => String(item.id ?? item.ruta_id) !== String(routeId)));
+      if (String(followingRoute?.id) === String(routeId)) setFollowingRoute(null);
+    } catch (error) {
+      setRoutesError(`No se pudo eliminar la ruta: ${error.message}`);
+    } finally {
+      setDeletingRouteId(null);
     }
   };
   const reloadLocals = async () => {
@@ -544,6 +560,9 @@ export default function PerfilCuenta({ profile, onBack }) {
                     <div className="fig-user-route-actions">
                       <button className="fig-primary" onClick={() => followSavedRoute(route)} disabled={followLoadingId === routeId}>
                         {followLoadingId === routeId ? "Calculando desde tu ubicación…" : "⌖ Seguir ruta"}
+                      </button>
+                      <button className="fig-danger" onClick={() => removeRoute(route)} disabled={deletingRouteId === routeId}>
+                        {deletingRouteId === routeId ? "Eliminando…" : "Eliminar ruta"}
                       </button>
                     </div>
                     {followError && <p className="fig-feedback fig-feedback-error" role="alert">{followError}</p>}
