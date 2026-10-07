@@ -120,7 +120,7 @@ const locationsByGuide = {
       icon: "🌿",
     },
   ],
-  Cebicherías: [
+  Cevicherías: [
     {
       name: "Cevicheria Mil Sabores",
       // Coordenadas obtenidas del Plus Code WCGJ+HFX compartido por el usuario.
@@ -355,7 +355,7 @@ const resultImages = {
     "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=480&h=320&fit=crop&auto=format",
     "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=480&h=320&fit=crop&auto=format",
   ],
-  Cebicherías: [
+  Cevicherías: [
     "https://crecemosjuntos.com.pe/wp-content/uploads/2023/09/Portada-Testimonial-Mil-Sabores.webp",
     "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=480&h=320&fit=crop&auto=format",
     "https://images.unsplash.com/photo-1547592180-85f173990554?w=480&h=320&fit=crop&auto=format",
@@ -395,7 +395,7 @@ const resultImages = {
 
 // Descripciones que aparecen debajo del título de algunas categorías.
 const resultDescriptions = {
-  Cebicherías: "Sabores del mar, restaurantes verificados y cocina marina local.",
+  Cevicherías: "Sabores del mar, restaurantes verificados y cocina marina local.",
   Hostales: "Hospedajes verificados para descansar cerca de la bahía.",
   "Atractivos Turísticos": "Lugares imperdibles para conocer la historia y paisaje local.",
 };
@@ -404,7 +404,7 @@ const resultDescriptions = {
 // Las pestañas de ciudad se manejan por separado dentro de ResultadosBusqueda.
 const resultFilters = {
   Hostales: ["Más recomendados", "Más cercanos", "Wi-Fi", "Cochera"],
-  Cebicherías: ["Más recomendados", "Más cercanos", "Vista al mar"],
+  Cevicherías: ["Más recomendados", "Más cercanos", "Vista al mar"],
   "Atractivos Turísticos": ["Más recomendados", "Más cercanos", "Acceso libre"],
 };
 
